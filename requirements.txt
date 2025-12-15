@@ -6,6 +6,6 @@ beautifulsoup4
 sqlalchemy
 psycopg2-binary
 python-jose[cryptography]
-passlib[bcrypt]
-bcrypt==3.2.2
+passlib[argon2]
+argon2-cffi
 alembic
