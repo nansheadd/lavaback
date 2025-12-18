@@ -133,3 +133,65 @@ class User(UserBase):
     role: Role | None = None
     class Config:
         from_attributes = True
+
+# Article Schemas
+class ArticleStatusEnum(str): # Mirror the enum for pydantic
+    DRAFT = "DRAFT"
+    IN_REVIEW = "IN_REVIEW"
+    CHANGES_REQUESTED = "CHANGES_REQUESTED"
+    APPROVED = "APPROVED"
+    PUBLISHED = "PUBLISHED"
+    ARCHIVED = "ARCHIVED"
+
+class ArticleBase(BaseModel):
+    title: str
+    slug: str
+    content: Optional[str] = None
+    excerpt: Optional[str] = None
+    cover_image: Optional[str] = None
+    status: Optional[str] = "DRAFT"
+    category: Optional[str] = None
+    tags: Optional[str] = None
+
+class ArticleCreate(ArticleBase):
+    pass
+
+class ArticleUpdate(BaseModel):
+    title: Optional[str] = None
+    slug: Optional[str] = None
+    content: Optional[str] = None
+    excerpt: Optional[str] = None
+    cover_image: Optional[str] = None
+    status: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[str] = None
+
+class ArticleReviewBase(BaseModel):
+    status: str
+    comments: Optional[str] = None
+
+class ArticleReviewCreate(ArticleReviewBase):
+    article_id: int
+    # reviewer_id comes from token
+
+class ArticleReview(ArticleReviewBase):
+    id: int
+    article_id: int
+    reviewer_id: int
+    created_at: datetime
+    reviewer: Optional[User] = None
+
+    class Config:
+        from_attributes = True
+
+class Article(ArticleBase):
+    id: int
+    author_id: int
+    created_at: datetime
+    updated_at: datetime
+    published_at: Optional[datetime] = None
+    author: Optional[User] = None
+    reviews: List[ArticleReview] = []
+
+    class Config:
+        from_attributes = True

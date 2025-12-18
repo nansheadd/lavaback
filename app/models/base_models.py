@@ -104,3 +104,170 @@ class User(Base):
     role_id = Column(Integer, ForeignKey("roles.id"))
 
     role = relationship("Role", back_populates="users")
+    messages = relationship("ChatMessage", back_populates="user")
+    orders = relationship("Order", back_populates="user")
+    subscription = relationship("UserSubscription", back_populates="user", uselist=False)
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    content = Column(String, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    user_id = Column(Integer, ForeignKey("users.id"))
+    
+    user = relationship("User", back_populates="messages")
+
+# ========== E-COMMERCE MODELS ==========
+
+class ProductCategory(Base):
+    __tablename__ = "product_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    slug = Column(String, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    icon = Column(String, nullable=True)  # Lucide icon name
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    products = relationship("Product", back_populates="category")
+
+class ProductType(str, enum.Enum):
+    PHYSICAL = "physical"
+    DIGITAL = "digital"
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    slug = Column(String, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    price = Column(Integer)  # Price in cents (e.g., 499 = 4.99€)
+    currency = Column(String, default="EUR")
+    product_type = Column(String, default=ProductType.PHYSICAL.value)
+    category_id = Column(Integer, ForeignKey("product_categories.id"), nullable=True)
+    
+    image_url = Column(String, nullable=True)
+    stock = Column(Integer, nullable=True)  # NULL for digital products
+    
+    stripe_product_id = Column(String, nullable=True)
+    stripe_price_id = Column(String, nullable=True)
+    
+    is_active = Column(Boolean, default=True)
+    is_featured = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    category = relationship("ProductCategory", back_populates="products")
+    order_items = relationship("OrderItem", back_populates="product")
+
+class SubscriptionInterval(str, enum.Enum):
+    MONTH = "month"
+    QUARTER = "quarter"
+    YEAR = "year"
+
+class SubscriptionPlan(Base):
+    __tablename__ = "subscription_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    description = Column(Text, nullable=True)
+    price = Column(Integer)  # Price in cents
+    currency = Column(String, default="EUR")
+    interval = Column(String, default=SubscriptionInterval.MONTH.value)
+    
+    features = Column(Text, nullable=True)  # JSON array of features
+    
+    stripe_product_id = Column(String, nullable=True)
+    stripe_price_id = Column(String, nullable=True)
+    
+    is_active = Column(Boolean, default=True)
+    is_popular = Column(Boolean, default=False)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    subscriptions = relationship("UserSubscription", back_populates="plan")
+
+class OrderStatus(str, enum.Enum):
+    PENDING = "pending"
+    PAID = "paid"
+    PROCESSING = "processing"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+    REFUNDED = "refunded"
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    
+    status = Column(String, default=OrderStatus.PENDING.value)
+    total_amount = Column(Integer)  # Total in cents
+    currency = Column(String, default="EUR")
+    
+    stripe_session_id = Column(String, nullable=True)
+    stripe_payment_intent_id = Column(String, nullable=True)
+    
+    shipping_address = Column(Text, nullable=True)  # JSON
+    billing_address = Column(Text, nullable=True)  # JSON
+    
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="orders")
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"))
+    product_id = Column(Integer, ForeignKey("products.id"))
+    
+    quantity = Column(Integer, default=1)
+    unit_price = Column(Integer)  # Price at time of purchase (cents)
+    
+    order = relationship("Order", back_populates="items")
+    product = relationship("Product", back_populates="order_items")
+
+class SubscriptionStatus(str, enum.Enum):
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
+    PAST_DUE = "past_due"
+    TRIALING = "trialing"
+    PAUSED = "paused"
+
+class UserSubscription(Base):
+    __tablename__ = "user_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    plan_id = Column(Integer, ForeignKey("subscription_plans.id"))
+    
+    stripe_subscription_id = Column(String, nullable=True)
+    status = Column(String, default=SubscriptionStatus.ACTIVE.value)
+    
+    current_period_start = Column(DateTime(timezone=True), nullable=True)
+    current_period_end = Column(DateTime(timezone=True), nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="subscription")
+    plan = relationship("SubscriptionPlan", back_populates="subscriptions")
+
+class AppSettings(Base):
+    __tablename__ = "app_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True)
+    value = Column(Text, nullable=True)
+    is_secret = Column(Boolean, default=False)  # Hide value in UI
+    description = Column(String, nullable=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+

@@ -42,6 +42,7 @@ class PageCreate(BaseModel):
 
 class PageUpdate(BaseModel):
     name: Optional[str] = None
+    slug: Optional[str] = None
     description: Optional[str] = None
     widgets: Optional[List[PageWidget]] = None
     theme: Optional[ThemeSettings] = None
@@ -168,6 +169,18 @@ def update_page(page_id: int, update: PageUpdate, db: Session = Depends(get_db))
         if page.name != update.name:
             changes.append(f"renamed from '{page.name}' to '{update.name}'")
         page.name = update.name
+    
+    if update.slug is not None:
+        new_slug = slugify(update.slug)
+        if page.slug != new_slug:
+            # Check for uniqueness
+            existing = db.query(BuilderPage).filter(BuilderPage.slug == new_slug).first()
+            if existing and existing.id != page.id:
+                raise HTTPException(status_code=400, detail="Slug already in use")
+            
+            changes.append(f"slug changed from '{page.slug}' to '{new_slug}'")
+            page.slug = new_slug
+
     if update.description is not None:
         if page.description != update.description:
             changes.append("description updated")

@@ -8,6 +8,8 @@ from app import models, schemas, database
 from app.api.workflows import router as workflows_router
 from app.api.pages import router as pages_router
 from app.api.activity import router as activity_router
+from app.api.articles import router as articles_router
+from app.api.shop import router as shop_router
 import uvicorn
 import shutil
 import os
@@ -22,6 +24,8 @@ app = FastAPI(title="DuoText Platform API")
 app.include_router(workflows_router, prefix="/api")
 app.include_router(pages_router, prefix="/api")
 app.include_router(activity_router, prefix="/api")
+app.include_router(articles_router, prefix="/api/articles", tags=["articles"])
+app.include_router(shop_router, prefix="/api", tags=["shop"])
 
 # Dependency
 def get_db():
@@ -63,33 +67,10 @@ app.mount("/uploads", StaticFiles(directory="app/uploads"), name="uploads")
 def read_root():
     return {"message": "DuoText Platform API is running"}
 
-# --- Auth Logic (Must be defined before endpoints using it) ---
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from app.auth import verify_password, create_access_token, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
-from datetime import timedelta
-from jose import JWTError, jwt
-from app.auth import SECRET_KEY, ALGORITHM
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=401,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        token_data = schemas.TokenData(username=username)
-    except JWTError:
-        raise credentials_exception
-    user = db.query(models.User).filter(models.User.username == token_data.username).first()
-    if user is None:
-        raise credentials_exception
-    return user
+# --- Auth Logic ---
+from fastapi.security import OAuth2PasswordRequestForm
+from app.auth import verify_password, create_access_token, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
+from datetime import datetime, timedelta
 
 @app.post("/token", response_model=schemas.Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -106,9 +87,212 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+class UserCreate(schemas.BaseModel):
+    username: str
+    email: str
+    password: str
+
+@app.post("/api/register", response_model=schemas.User)
+def register(user: UserCreate, db: Session = Depends(get_db)):
+    db_user = db.query(models.User).filter((models.User.username == user.username) | (models.User.email == user.email)).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username or Email already registered")
+    
+    user_role = db.query(models.Role).filter(models.Role.name == "user").first()
+    if not user_role:
+        raise HTTPException(status_code=500, detail="Default role configuration missing")
+
+    hashed_pw = get_password_hash(user.password)
+    new_user = models.User(
+        username=user.username,
+        email=user.email,
+        hashed_password=hashed_pw,
+        role_id=user_role.id,
+        is_active=True
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
 @app.get("/users/me", response_model=schemas.User)
 async def read_users_me(current_user: schemas.User = Depends(get_current_user)):
     return current_user
+
+# --- User Management ---
+class UserAdminCreate(schemas.BaseModel):
+    username: str
+    email: str
+    password: str
+    role_name: str
+
+@app.post("/api/users", response_model=schemas.User)
+def create_user_admin(user: UserAdminCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role.name not in ["admin", "engineer"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    db_user = db.query(models.User).filter((models.User.username == user.username) | (models.User.email == user.email)).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username or Email already registered")
+    
+    role = db.query(models.Role).filter(models.Role.name == user.role_name).first()
+    if not role:
+        raise HTTPException(status_code=400, detail="Role not found")
+
+    hashed_pw = get_password_hash(user.password)
+    new_user = models.User(
+        username=user.username,
+        email=user.email,
+        hashed_password=hashed_pw,
+        role_id=role.id,
+        is_active=True
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role.name not in ["admin", "engineer"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot delete yourself")
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    db.delete(user)
+    db.commit()
+    return {"message": "User deleted successfully"}
+
+@app.get("/api/users", response_model=list[schemas.User])
+def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # Simple admin check
+    if current_user.role.name not in ["admin", "engineer"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    users = db.query(models.User).offset(skip).limit(limit).all()
+    return users
+
+class UserRoleUpdate(schemas.BaseModel):
+    role_name: str
+
+@app.put("/api/users/{user_id}/role")
+def update_user_role(
+    user_id: int, 
+    role_update: UserRoleUpdate, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role.name not in ["admin", "engineer"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    role = db.query(models.Role).filter(models.Role.name == role_update.role_name).first()
+    if not role:
+        raise HTTPException(status_code=400, detail="Role not found")
+    
+    user.role_id = role.id
+    db.commit()
+    return {"message": f"User role updated to {role.name}"}
+
+# --- Role Management API ---
+class RoleUpdate(schemas.BaseModel):
+    permissions: str
+
+class RoleOut(schemas.BaseModel):
+    id: int
+    name: str
+    permissions: str | None
+
+    class Config:
+        from_attributes = True
+
+@app.get("/api/roles", response_model=list[RoleOut])
+def read_roles(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role.name not in ["admin", "engineer"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return db.query(models.Role).all()
+
+@app.put("/api/roles/{role_id}")
+def update_role_permissions(
+    role_id: int,
+    role_update: RoleUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role.name not in ["admin", "engineer"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    role = db.query(models.Role).filter(models.Role.id == role_id).first()
+    if not role:
+        raise HTTPException(status_code=404, detail="Role not found")
+    
+    role.permissions = role_update.permissions
+    db.commit()
+    return {"message": f"Role {role.name} updated"}
+
+
+# --- Team Chat API ---
+class ChatMessageCreate(schemas.BaseModel):
+    content: str
+
+class UserChatOut(schemas.BaseModel):
+    id: int
+    username: str
+    role_name: str | None = None
+
+class ChatMessageOut(schemas.BaseModel):
+    id: int
+    content: str
+    timestamp: datetime
+    user: UserChatOut
+
+    class Config:
+        from_attributes = True
+
+@app.get("/api/chat", response_model=list[ChatMessageOut])
+def get_chat_messages(limit: int = 50, db: Session = Depends(get_db)):
+    msgs = db.query(models.ChatMessage).order_by(models.ChatMessage.timestamp.desc()).limit(limit).all()
+    # Manual mapping to avoid circular deps or complex nested schemas
+    result = []
+    for m in msgs:
+        role_name = m.user.role.name if m.user and m.user.role else "user"
+        result.append({
+            "id": m.id,
+            "content": m.content,
+            "timestamp": m.timestamp,
+            "user": {
+                "id": m.user.id if m.user else 0,
+                "username": m.user.username if m.user else "Unknown",
+                "role_name": role_name
+            }
+        })
+    return result # Returns newest first
+
+@app.post("/api/chat", response_model=ChatMessageOut)
+def post_chat_message(msg: ChatMessageCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    new_msg = models.ChatMessage(content=msg.content, user_id=current_user.id)
+    db.add(new_msg)
+    db.commit()
+    db.refresh(new_msg)
+    
+    role_name = current_user.role.name if current_user.role else "user"
+    return {
+        "id": new_msg.id,
+        "content": new_msg.content,
+        "timestamp": new_msg.timestamp,
+        "user": {
+            "id": current_user.id,
+            "username": current_user.username,
+            "role_name": role_name
+        }
+    }
 
 # --- Project & Comment Endpoints ---
 
@@ -281,22 +465,39 @@ async def seed_data():
             db.commit()
             print("Seeded 'Text Editor' project.")
         
-        # Seed Roles
-        roles = ["admin", "editor", "subscriber", "user", "journalist"]
-        for role_name in roles:
-            role = db.query(models.Role).filter(models.Role.name == role_name).first()
+        # Seed Roles & Permissions
+        roles_data = [
+            {"name": "admin", "permissions": "*"},
+            {"name": "engineer", "permissions": "*"},
+            {"name": "editor", "permissions": "view:content,edit:content,publish:content"},
+            {"name": "author", "permissions": "view:own_content,edit:own_content"},
+            {"name": "user", "permissions": "view:public"}
+        ]
+        
+        for r_data in roles_data:
+            role = db.query(models.Role).filter(models.Role.name == r_data["name"]).first()
             if not role:
-                db.add(models.Role(name=role_name))
+                db.add(models.Role(name=r_data["name"], permissions=r_data["permissions"]))
+            else:
+                # Update permissions if changed
+                if role.permissions != r_data["permissions"]:
+                    role.permissions = r_data["permissions"]
+        
         db.commit()
 
         # Seed Admin User
         admin_user = db.query(models.User).filter(models.User.username == "admin").first()
         if not admin_user:
-            hashed_pw = get_password_hash("password")
+            hashed_pw = get_password_hash("admin") # User requested admin/admin
             admin_role = db.query(models.Role).filter(models.Role.name == "admin").first()
-            db.add(models.User(username="admin", email="admin@example.com", hashed_password=hashed_pw, role_id=admin_role.id))
+            db.add(models.User(username="admin", email="admin@lava.com", hashed_password=hashed_pw, role_id=admin_role.id))
             db.commit()
             print("Seeded 'admin' user.")
+        else:
+            # Update password if needed (for dev convenience)
+            # hashed_pw = get_password_hash("admin")
+            # admin_user.hashed_password = hashed_pw
+            pass
 
     finally:
         db.close()
