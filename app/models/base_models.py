@@ -102,6 +102,7 @@ class User(Base):
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     role_id = Column(Integer, ForeignKey("roles.id"))
+    status = Column(String, default="offline") # online, away, dnd, offline
 
     role = relationship("Role", back_populates="users")
     messages = relationship("ChatMessage", back_populates="user")
@@ -270,4 +271,100 @@ class AppSettings(Base):
     is_secret = Column(Boolean, default=False)  # Hide value in UI
     description = Column(String, nullable=True)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+# ========== MESSAGING SYSTEM (Slack-like) ==========
+
+class ChannelType(str, enum.Enum):
+    PUBLIC = "public"
+    PRIVATE = "private"
+    DIRECT = "direct"  # DM between 2 users
+
+class ChatChannel(Base):
+    __tablename__ = "chat_channels"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    slug = Column(String, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    channel_type = Column(String, default=ChannelType.PUBLIC.value)
+    
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_archived = Column(Boolean, default=False)
+
+    creator = relationship("User", foreign_keys=[created_by])
+    members = relationship("ChannelMember", back_populates="channel", cascade="all, delete-orphan")
+    messages = relationship("ChannelMessage", back_populates="channel", cascade="all, delete-orphan")
+
+class MemberRole(str, enum.Enum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    MEMBER = "member"
+
+class ChannelMember(Base):
+    __tablename__ = "channel_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(Integer, ForeignKey("chat_channels.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    
+    role = Column(String, default=MemberRole.MEMBER.value)
+    joined_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_read_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Notification preferences
+    notifications_enabled = Column(Boolean, default=True)
+    sound_enabled = Column(Boolean, default=True)
+
+    channel = relationship("ChatChannel", back_populates="members")
+    user = relationship("User")
+
+class ChannelMessage(Base):
+    __tablename__ = "channel_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(Integer, ForeignKey("chat_channels.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    
+    content = Column(Text, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    edited_at = Column(DateTime(timezone=True), nullable=True)
+    
+    is_system_message = Column(Boolean, default=False)  # "X joined the channel"
+    reply_to_id = Column(Integer, ForeignKey("channel_messages.id"), nullable=True)  # Thread support
+
+    channel = relationship("ChatChannel", back_populates="messages")
+    user = relationship("User")
+    reply_to = relationship("ChannelMessage", remote_side=[id])
+    
+    reactions = relationship("MessageReaction", back_populates="message", cascade="all, delete-orphan")
+    attachments = relationship("MessageAttachment", back_populates="message", cascade="all, delete-orphan")
+
+class MessageReaction(Base):
+    __tablename__ = "message_reactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("channel_messages.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    emoji = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    message = relationship("ChannelMessage", back_populates="reactions")
+    user = relationship("User")
+
+class MessageAttachment(Base):
+    __tablename__ = "message_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("channel_messages.id"))
+    
+    file_url = Column(String, nullable=False)
+    file_type = Column(String, nullable=False) # image/png, application/pdf etc
+    file_name = Column(String, nullable=False)
+    file_size = Column(Integer, nullable=True) # in bytes
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    message = relationship("ChannelMessage", back_populates="attachments")
+
 

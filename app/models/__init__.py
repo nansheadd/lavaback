@@ -11,7 +11,10 @@ from .base_models import (
     SubscriptionInterval, SubscriptionPlan,
     OrderStatus, Order, OrderItem,
     SubscriptionStatus, UserSubscription,
-    AppSettings
+    AppSettings,
+    # Messaging
+    ChannelType, ChatChannel, MemberRole, ChannelMember, ChannelMessage,
+    MessageReaction, MessageAttachment
 )
 
 # Workflow models
@@ -37,5 +40,8 @@ __all__ = [
     'SubscriptionInterval', 'SubscriptionPlan',
     'OrderStatus', 'Order', 'OrderItem',
     'SubscriptionStatus', 'UserSubscription',
-    'AppSettings'
+    'AppSettings',
+    # Messaging
+    'ChannelType', 'ChatChannel', 'MemberRole', 'ChannelMember', 'ChannelMessage',
+    'MessageReaction', 'MessageAttachment'
 ]

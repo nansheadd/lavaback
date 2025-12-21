@@ -10,6 +10,8 @@ from app.api.pages import router as pages_router
 from app.api.activity import router as activity_router
 from app.api.articles import router as articles_router
 from app.api.shop import router as shop_router
+from app.api.messaging import router as messaging_router
+from app.api.upload import router as upload_router
 import uvicorn
 import shutil
 import os
@@ -20,12 +22,17 @@ models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="DuoText Platform API")
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Register routers
 app.include_router(workflows_router, prefix="/api")
 app.include_router(pages_router, prefix="/api")
 app.include_router(activity_router, prefix="/api")
 app.include_router(articles_router, prefix="/api/articles", tags=["articles"])
 app.include_router(shop_router, prefix="/api", tags=["shop"])
+app.include_router(messaging_router, prefix="/api", tags=["messaging"])
+app.include_router(upload_router, prefix="/api", tags=["upload"])
 
 # Dependency
 def get_db():
