@@ -12,6 +12,7 @@ from app.api.articles import router as articles_router
 from app.api.shop import router as shop_router
 from app.api.messaging import router as messaging_router
 from app.api.upload import router as upload_router
+from app.api.users import router as users_router
 import uvicorn
 import shutil
 import os
@@ -33,6 +34,7 @@ app.include_router(articles_router, prefix="/api/articles", tags=["articles"])
 app.include_router(shop_router, prefix="/api", tags=["shop"])
 app.include_router(messaging_router, prefix="/api", tags=["messaging"])
 app.include_router(upload_router, prefix="/api", tags=["upload"])
+app.include_router(users_router, prefix="/api/users", tags=["users"])
 
 # Dependency
 def get_db():

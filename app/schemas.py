@@ -134,6 +134,15 @@ class User(UserBase):
     class Config:
         from_attributes = True
 
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+
+class PasswordChange(BaseModel):
+    old_password: str
+    new_password: str
+    confirm_password: str
+
 # Article Schemas
 class ArticleStatusEnum(str): # Mirror the enum for pydantic
     DRAFT = "DRAFT"
