@@ -116,12 +116,13 @@ async def parse_docx(file) -> str:
     
     # Append notes section if any
     if used_notes:
-        html_output.append('<hr class="footnotes-divider my-8 border-t-2 border-slate-300" />')
-        html_output.append('<section class="footnotes-section mt-6 pt-4">')
-        html_output.append('<h4 class="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">Notes</h4>')
-        html_output.append('<ol class="footnotes-list text-sm text-slate-600 space-y-2 list-decimal list-inside">')
+        # Use inline styles to ensure it renders even if Tailwind classes are purged or not applied to dynamic content
+        html_output.append('<hr class="footnotes-divider" style="margin-top: 2rem; margin-bottom: 2rem; border-top: 2px solid #cbd5e1;" />')
+        html_output.append('<section class="footnotes-section" style="margin-top: 1.5rem; padding-top: 1rem;">')
+        html_output.append('<h4 style="font-size: 0.875rem; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem;">Notes de bas de page</h4>')
+        html_output.append('<ol class="footnotes-list" style="font-size: 0.875rem; color: #475569; list-style-type: decimal; list-style-position: inside; padding-left: 1rem;">')
         for idx, (_, text) in enumerate(used_notes):
-            html_output.append(f'<li id="fn-{idx+1}" class="footnote-item"><span class="footnote-text">{text}</span> <a href="#fnref-{idx+1}" class="footnote-backref text-brand-600 hover:underline">↩</a></li>')
+            html_output.append(f'<li id="fn-{idx+1}" class="footnote-item" style="margin-bottom: 0.5rem;"><span class="footnote-text">{text}</span> <a href="#fnref-{idx+1}" class="footnote-backref" style="color: #4f46e5; text-decoration: none; margin-left: 0.25rem;">↩</a></li>')
         html_output.append('</ol>')
         html_output.append('</section>')
         
