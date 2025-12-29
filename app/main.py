@@ -20,9 +20,19 @@ import os
 import uuid
 
 # Create all tables (Base now includes workflow tables)
-models.Base.metadata.create_all(bind=database.engine)
+# Moved to startup event for better error handling
+# models.Base.metadata.create_all(bind=database.engine)
+
 
 app = FastAPI(title="DuoText Platform API")
+
+@app.on_event("startup")
+async def startup_event():
+    try:
+        models.Base.metadata.create_all(bind=database.engine)
+        print("Database tables created successfully.")
+    except Exception as e:
+        print(f"Error creating database tables: {e}")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -454,7 +464,13 @@ CURRENT_VERSION = "v1.4.0"
 PATCH_NOTES = "Added Role Management (Create/Delete) and Deployment Logging."
 
 @app.on_event("startup")
-async def seed_data():
+async def startup_event():
+    # Create tables here to ensure we catch errors if DB is unreachable
+    try:
+        models.Base.metadata.create_all(bind=database.engine)
+    except Exception as e:
+        print(f"Error creating tables: {e}")
+
     db = database.SessionLocal()
     try:
         # --- Deployment Log Check ---
