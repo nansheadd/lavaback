@@ -468,8 +468,22 @@ async def startup_event():
     # Create tables here to ensure we catch errors if DB is unreachable
     try:
         models.Base.metadata.create_all(bind=database.engine)
+        print("Database tables created successfully.")
+        
+        # --- Auto-Migration for missing 'status' column ---
+        from sqlalchemy import inspect, text
+        inspector = inspect(database.engine)
+        if inspector.has_table("users"):
+            columns = [c["name"] for c in inspector.get_columns("users")]
+            if "status" not in columns:
+                print("Migrating: Adding 'status' column to users table...")
+                with database.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN status VARCHAR DEFAULT 'offline'"))
+                    conn.commit()
+                print("Migration successful: 'status' column added.")
+                
     except Exception as e:
-        print(f"Error creating tables: {e}")
+        print(f"Error creating/migrating database: {e}")
 
     db = database.SessionLocal()
     try:
