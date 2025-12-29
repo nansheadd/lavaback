@@ -127,6 +127,13 @@ class Role(RoleBase):
     class Config:
         from_attributes = True
 
+class RoleCreate(RoleBase):
+    pass
+
+class RoleUpdate(BaseModel):
+    permissions: str
+
+
 class User(UserBase):
     id: int
     is_active: bool

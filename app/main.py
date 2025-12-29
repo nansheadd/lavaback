@@ -13,6 +13,7 @@ from app.api.shop import router as shop_router
 from app.api.messaging import router as messaging_router
 from app.api.upload import router as upload_router
 from app.api.users import router as users_router
+from app.api.roles import router as roles_router
 import uvicorn
 import shutil
 import os
@@ -35,6 +36,7 @@ app.include_router(shop_router, prefix="/api", tags=["shop"])
 app.include_router(messaging_router, prefix="/api", tags=["messaging"])
 app.include_router(upload_router, prefix="/api", tags=["upload"])
 app.include_router(users_router, prefix="/api/users", tags=["users"])
+app.include_router(roles_router, prefix="/api")
 
 # Dependency
 def get_db():
@@ -210,41 +212,7 @@ def update_user_role(
     db.commit()
     return {"message": f"User role updated to {role.name}"}
 
-# --- Role Management API ---
-class RoleUpdate(schemas.BaseModel):
-    permissions: str
 
-class RoleOut(schemas.BaseModel):
-    id: int
-    name: str
-    permissions: str | None
-
-    class Config:
-        from_attributes = True
-
-@app.get("/api/roles", response_model=list[RoleOut])
-def read_roles(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role.name not in ["admin", "engineer"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    return db.query(models.Role).all()
-
-@app.put("/api/roles/{role_id}")
-def update_role_permissions(
-    role_id: int,
-    role_update: RoleUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    if current_user.role.name not in ["admin", "engineer"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    role = db.query(models.Role).filter(models.Role.id == role_id).first()
-    if not role:
-        raise HTTPException(status_code=404, detail="Role not found")
-    
-    role.permissions = role_update.permissions
-    db.commit()
-    return {"message": f"Role {role.name} updated"}
 
 
 # --- Team Chat API ---
@@ -456,12 +424,56 @@ def update_review_status(thread_id: int, status: str, db: Session = Depends(get_
     db.commit()
     return {"message": "Status updated"}
 
+@app.delete("/api/reviews/{thread_id}")
+def delete_review_thread(
+    thread_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Delete a review thread and all its comments."""
+    thread = db.query(models.ReviewThread).filter(models.ReviewThread.id == thread_id).first()
+    if not thread:
+        raise HTTPException(status_code=404, detail="Review thread not found")
+    
+    # Delete associated comments first
+    db.query(models.ReviewComment).filter(models.ReviewComment.thread_id == thread_id).delete()
+    
+    # Delete the thread
+    db.delete(thread)
+    db.commit()
+    return {"message": "Review thread deleted"}
+
+
+
 
 # Seeding Logic Update
+CURRENT_VERSION = "v1.4.0"
+PATCH_NOTES = "Added Role Management (Create/Delete) and Deployment Logging."
+
 @app.on_event("startup")
 async def seed_data():
     db = database.SessionLocal()
     try:
+        # --- Deployment Log Check ---
+        # Check if we already logged this version
+        existing_log = db.query(models.ActivityLog).filter(
+            models.ActivityLog.action == "Deployment",
+            models.ActivityLog.details.like(f"%{CURRENT_VERSION}%")
+        ).first()
+
+        if not existing_log:
+            # Log deployment
+            deploy_log = models.ActivityLog(
+                action="Deployment",
+                resource_type="system",
+                details=f"Deployed {CURRENT_VERSION}: {PATCH_NOTES}",
+                timestamp=datetime.utcnow()
+            )
+            db.add(deploy_log)
+            db.commit()
+            print(f"Logged deployment for {CURRENT_VERSION}")
+
+        # --- Existing Seeding ---
         # Seed Project
         project = db.query(models.Project).filter(models.Project.title == "Text Editor").first()
         if not project:
