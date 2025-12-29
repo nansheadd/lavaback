@@ -60,6 +60,9 @@ origins = [
 if cors_origins_env:
     origins.extend([origin.strip() for origin in cors_origins_env.split(",")])
 
+# Explicitly add production frontend
+origins.append("https://lavatools.vercel.app")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -523,8 +526,10 @@ async def seed_data():
     finally:
         db.close()
 
+from fastapi import Request
+
 @app.post("/api/upload-image")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_image(request: Request, file: UploadFile = File(...)):
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
     
@@ -536,7 +541,8 @@ async def upload_image(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    return {"url": f"http://localhost:8000/uploads/{filename}"}
+    base_url = str(request.base_url).rstrip("/")
+    return {"url": f"{base_url}/uploads/{filename}"}
 
 @app.post("/api/import-docx")
 async def import_docx(file: UploadFile = File(...)):
