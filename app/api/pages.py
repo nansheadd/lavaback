@@ -39,6 +39,10 @@ class PageCreate(BaseModel):
     description: Optional[str] = None
     widgets: List[PageWidget] = []
     theme: Optional[ThemeSettings] = None
+    project_id: Optional[int] = None # Added
+    # Access Control
+    access_level: str = "public"
+    allowed_roles: List[str] = []
 
 class PageUpdate(BaseModel):
     name: Optional[str] = None
@@ -47,6 +51,10 @@ class PageUpdate(BaseModel):
     widgets: Optional[List[PageWidget]] = None
     theme: Optional[ThemeSettings] = None
     is_published: Optional[bool] = None
+    project_id: Optional[int] = None # Added
+    # Access Control
+    access_level: Optional[str] = None
+    allowed_roles: Optional[List[str]] = None
 
 
 def slugify(text: str) -> str:
@@ -60,16 +68,22 @@ def slugify(text: str) -> str:
 # === API Endpoints ===
 
 @router.get("")
-def list_pages(db: Session = Depends(get_db)):
-    """List all saved pages."""
-    pages = db.query(BuilderPage).order_by(BuilderPage.updated_at.desc()).all()
+def list_pages(project_id: Optional[int] = None, db: Session = Depends(get_db)):
+    """List all saved pages, optionally filtered by project_id."""
+    query = db.query(BuilderPage)
+    if project_id:
+        query = query.filter(BuilderPage.project_id == project_id)
+    pages = query.order_by(BuilderPage.updated_at.desc()).all()
     return [
         {
             "id": p.id,
             "name": p.name,
             "slug": p.slug,
             "description": p.description,
+            "project_id": p.project_id,
             "is_published": p.is_published,
+            "access_level": p.access_level,
+            "allowed_roles": json.loads(p.allowed_roles or "[]"),
             "created_at": p.created_at.isoformat() if p.created_at else None,
             "updated_at": p.updated_at.isoformat() if p.updated_at else None
         }
@@ -91,9 +105,13 @@ def create_page(page: PageCreate, db: Session = Depends(get_db)):
     db_page = BuilderPage(
         name=page.name,
         slug=slug,
+        project_id=page.project_id,
+
         description=page.description,
         widgets_json=json.dumps([w.model_dump() for w in page.widgets]),
-        theme_json=json.dumps(page.theme.model_dump()) if page.theme else None
+        theme_json=json.dumps(page.theme.model_dump()) if page.theme else None,
+        access_level=page.access_level,
+        allowed_roles=json.dumps(page.allowed_roles)
     )
     db.add(db_page)
     db.commit()
@@ -133,7 +151,10 @@ def get_page(page_id: int, db: Session = Depends(get_db)):
         "description": page.description,
         "widgets": json.loads(page.widgets_json or "[]"),
         "theme": json.loads(page.theme_json) if page.theme_json else None,
+        "theme": json.loads(page.theme_json) if page.theme_json else None,
         "is_published": page.is_published,
+        "access_level": page.access_level,
+        "allowed_roles": json.loads(page.allowed_roles or "[]"),
         "created_at": page.created_at.isoformat() if page.created_at else None,
         "updated_at": page.updated_at.isoformat() if page.updated_at else None
     }
@@ -152,7 +173,10 @@ def get_page_by_slug(slug: str, db: Session = Depends(get_db)):
         "slug": page.slug,
         "widgets": json.loads(page.widgets_json or "[]"),
         "theme": json.loads(page.theme_json) if page.theme_json else None,
-        "is_published": page.is_published
+        "theme": json.loads(page.theme_json) if page.theme_json else None,
+        "is_published": page.is_published,
+        "access_level": page.access_level,
+        "allowed_roles": json.loads(page.allowed_roles or "[]")
     }
 
 
@@ -200,6 +224,17 @@ def update_page(page_id: int, update: PageUpdate, db: Session = Depends(get_db))
         if page.is_published != update.is_published:
             changes.append(f"published status changed to {update.is_published}")
         page.is_published = update.is_published
+    
+    if update.access_level is not None:
+        if page.access_level != update.access_level:
+            changes.append(f"access level changed to {update.access_level}")
+        page.access_level = update.access_level
+
+    if update.allowed_roles is not None:
+        new_roles_json = json.dumps(update.allowed_roles)
+        if page.allowed_roles != new_roles_json:
+            changes.append("allowed roles updated")
+        page.allowed_roles = new_roles_json
     
     db.commit()
     db.refresh(page)

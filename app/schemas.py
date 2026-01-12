@@ -23,6 +23,7 @@ class ProjectBase(BaseModel):
     version: Optional[str] = "0.0.1"
     summary: Optional[str] = None
     checklist: Optional[str] = "[]"
+    settings: Optional[str] = "{}"
 
 class ProjectCreate(ProjectBase):
     pass
@@ -79,6 +80,7 @@ class ReviewComment(ReviewCommentBase):
     likes: int = 0
     dislikes: int = 0
     author_id: int | None = None
+    app_user_id: int | None = None
 
     class Config:
         from_attributes = True
@@ -86,6 +88,7 @@ class ReviewComment(ReviewCommentBase):
 class ReviewThreadBase(BaseModel):
     tool_id: str | None = None
     selection_json: str | None = None
+    selection_text: str | None = None
     coordinates: str | None = None
     context_type: str = "text"
     category: str = "comment"
@@ -208,6 +211,24 @@ class Article(ArticleBase):
     published_at: Optional[datetime] = None
     author: Optional[User] = None
     reviews: List[ArticleReview] = []
+
+    class Config:
+        from_attributes = True
+
+# App User Schemas
+class AppUserBase(BaseModel):
+    username: str
+    email: Optional[str] = None
+    role: str = "user"
+
+class AppUserCreate(AppUserBase):
+    password: str
+
+class AppUser(AppUserBase):
+    id: int
+    project_id: int
+    is_active: bool
+    created_at: datetime
 
     class Config:
         from_attributes = True

@@ -19,9 +19,11 @@ class Project(Base):
     version = Column(String, default="0.0.1")
     summary = Column(Text, nullable=True)
     checklist = Column(Text, default="[]") # JSON string of completed checks
+    settings = Column(Text, default="{}") # JSON settings for the app (tools enabled, theme, etc.)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     comments = relationship("Comment", back_populates="project", cascade="all, delete-orphan")
+    app_users = relationship("AppUser", back_populates="project", cascade="all, delete-orphan")
 
 class ActivityLog(Base):
     __tablename__ = "activity_logs"
@@ -60,6 +62,7 @@ class ReviewThread(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     tool_id = Column(String, nullable=True) 
     selection_json = Column(String, nullable=True) 
+    selection_text = Column(Text, nullable=True) # Selected text context
     coordinates = Column(String, nullable=True) # JSON {x, y}
     context_type = Column(String, default="text") # "text" or "point"
     category = Column(String, default="comment") # "bug", "design", "question", "comment"
@@ -74,7 +77,8 @@ class ReviewComment(Base):
     id = Column(Integer, primary_key=True, index=True)
     thread_id = Column(Integer, ForeignKey("review_threads.id"))
     content = Column(Text)
-    author_id = Column(Integer, ForeignKey("users.id"), nullable=True) # Link to User
+    author_id = Column(Integer, ForeignKey("users.id"), nullable=True) # Link to CRM User (Admin/Editor)
+    app_user_id = Column(Integer, ForeignKey("app_users.id"), nullable=True) # Link to App User (End User)
     author_name = Column(String, default="User") # Fallback/Cache
     edited_at = Column(DateTime(timezone=True), nullable=True)
     likes = Column(Integer, default=0)
@@ -83,6 +87,28 @@ class ReviewComment(Base):
 
     thread = relationship("ReviewThread", back_populates="comments")
     author = relationship("User") # Relationship to User
+    app_user = relationship("AppUser") # Relationship to AppUser
+    
+class AppUser(Base):
+    """
+    End-users of the generated applications (not the CRM users).
+    Scoped to a specific Project.
+    """
+    __tablename__ = "app_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    email = Column(String, index=True)
+    password_hash = Column(String, nullable=True) # Optional if using passwordless/external auth
+    username = Column(String, nullable=True)
+    
+    is_active = Column(Boolean, default=True)
+    is_guest = Column(Boolean, default=False)
+    
+    extra_data = Column(Text, default="{}") # Flexible profile data
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    project = relationship("Project", back_populates="app_users")
 
 class Role(Base):
     __tablename__ = "roles"
@@ -108,7 +134,7 @@ class User(Base):
     messages = relationship("ChatMessage", back_populates="user")
     orders = relationship("Order", back_populates="user")
     subscription = relationship("UserSubscription", back_populates="user", uselist=False)
-
+    notifications = relationship("Notification", back_populates="user")
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
@@ -366,5 +392,28 @@ class MessageAttachment(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     message = relationship("ChannelMessage", back_populates="attachments")
+
+# ========== NOTIFICATIONS ==========
+
+class NotificationType(str, enum.Enum):
+    MENTION = "mention"
+    SYSTEM = "system"
+    REPLY = "reply"
+    NEW_MESSAGE = "new_message"
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    notification_type = Column(String, default=NotificationType.SYSTEM.value)
+    title = Column(String)
+    content = Column(String)
+    related_link = Column(String, nullable=True) # e.g., /chat/channels/1
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="notifications")
+
 
 

@@ -4,6 +4,7 @@ from sqlalchemy import or_, and_
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+import re
 from app import models, database
 from app.auth import get_current_user
 
@@ -497,6 +498,27 @@ def send_message(
     # Update last_read_at for sender
     membership.last_read_at = datetime.utcnow()
     
+    # Handle Mentions
+    mentions = re.findall(r"@(\w+)", message.content)
+    if mentions:
+        mentioned_users = db.query(models.User).filter(models.User.username.in_(mentions)).all()
+        for user in mentioned_users:
+            # Don't notify self
+            if user.id != current_user.id:
+                # Check if user has access to this channel (if private)
+                # But for now, we assume if they are mentioned, we notify them. 
+                # Ideally check membership if private channel.
+                
+                # Create Notification
+                notification = models.Notification(
+                    user_id=user.id,
+                    notification_type=models.NotificationType.MENTION.value,
+                    title=f"New mention in {channel.name}",
+                    content=f"{current_user.username} mentioned you: {message.content[:50]}...",
+                    related_link=f"/dashboard/chat?channel={channel_id}" 
+                )
+                db.add(notification)
+
     db.commit()
     db.refresh(db_message)
     

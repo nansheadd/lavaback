@@ -47,6 +47,10 @@ app.include_router(messaging_router, prefix="/api", tags=["messaging"])
 app.include_router(upload_router, prefix="/api", tags=["upload"])
 app.include_router(users_router, prefix="/api/users", tags=["users"])
 app.include_router(roles_router, prefix="/api")
+from app.api.notifications import router as notifications_router
+app.include_router(notifications_router, prefix="/api")
+from app.api.apps import router as apps_router
+app.include_router(apps_router, prefix="/api")
 
 # Dependency
 def get_db():
@@ -481,12 +485,93 @@ async def startup_event():
                     conn.execute(text("ALTER TABLE users ADD COLUMN status VARCHAR DEFAULT 'offline'"))
                     conn.commit()
                 print("Migration successful: 'status' column added.")
+
+        # --- Auto-Migration for BuilderPage access control ---
+        if inspector.has_table("builder_pages"):
+            columns = [c["name"] for c in inspector.get_columns("builder_pages")]
+            if "access_level" not in columns:
+                print("Migrating: Adding 'access_level' and 'allowed_roles' columns to builder_pages...")
+                with database.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE builder_pages ADD COLUMN access_level VARCHAR DEFAULT 'public'"))
+                    conn.execute(text("ALTER TABLE builder_pages ADD COLUMN allowed_roles TEXT DEFAULT '[]'"))
+                    conn.commit()
+                print("Migration successful: Access control columns added.")
+
+        if inspector.has_table("builder_pages"):
+            columns = [c["name"] for c in inspector.get_columns("builder_pages")]
+            if "project_id" not in columns:
+                print("Migrating: Adding 'project_id' column to builder_pages...")
+                with database.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE builder_pages ADD COLUMN project_id INTEGER"))
+                    conn.commit()
+                print("Migration successful: 'project_id' column added.")
+
+        # --- Auto-Migration for Project settings ---
+        if inspector.has_table("projects"):
+            columns = [c["name"] for c in inspector.get_columns("projects")]
+            if "settings" not in columns:
+                print("Migrating: Adding 'settings' column to projects...")
+                with database.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE projects ADD COLUMN settings TEXT DEFAULT '{}'"))
+                    conn.commit()
+                print("Migration successful: 'settings' column added.")
+
+        # --- Auto-Migration for ReviewComment app_user_id ---
+        if inspector.has_table("review_comments"):
+            columns = [c["name"] for c in inspector.get_columns("review_comments")]
+            if "app_user_id" not in columns:
+                print("Migrating: Adding 'app_user_id' column to review_comments...")
+                with database.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE review_comments ADD COLUMN app_user_id INTEGER"))
+                    conn.commit()
+                print("Migration successful: 'app_user_id' column added.")
+
+        # --- Auto-Migration for ReviewThread selection_text ---
+        if inspector.has_table("review_threads"):
+            columns = [c["name"] for c in inspector.get_columns("review_threads")]
+            if "selection_text" not in columns:
+                print("Migrating: Adding 'selection_text' column to review_threads...")
+                with database.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE review_threads ADD COLUMN selection_text TEXT"))
+                    conn.commit()
+                print("Migration successful: 'selection_text' column added.")
                 
     except Exception as e:
         print(f"Error creating/migrating database: {e}")
 
     db = database.SessionLocal()
     try:
+        # --- Seed Journal Pages ---
+        import json
+        
+        # 1. Home Page
+        home_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == "home").first()
+        if not home_page:
+            print("Seeding 'Home' page...")
+            db.add(models.BuilderPage(
+                name="Home", 
+                slug="home", 
+                description="Journal Home Page / Landing Page",
+                widgets_json="[]", 
+                is_published=True,
+                access_level="public"
+            ))
+            db.commit()
+
+        # 2. Article Template Page
+        article_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == "article").first()
+        if not article_page:
+            print("Seeding 'Article Template' page...")
+            db.add(models.BuilderPage(
+                name="Article Template", 
+                slug="article", 
+                description="Template for displaying single articles",
+                widgets_json="[]", 
+                is_published=True,
+                access_level="public"
+            ))
+            db.commit()
+
         # --- Deployment Log Check ---
         # Check if we already logged this version
         existing_log = db.query(models.ActivityLog).filter(

@@ -14,7 +14,8 @@ from .base_models import (
     AppSettings,
     # Messaging
     ChannelType, ChatChannel, MemberRole, ChannelMember, ChannelMessage,
-    MessageReaction, MessageAttachment
+    MessageReaction, MessageAttachment,
+    Notification, NotificationType
 )
 
 # Workflow models
@@ -43,5 +44,6 @@ __all__ = [
     'AppSettings',
     # Messaging
     'ChannelType', 'ChatChannel', 'MemberRole', 'ChannelMember', 'ChannelMessage',
-    'MessageReaction', 'MessageAttachment'
+    'MessageReaction', 'MessageAttachment',
+    'Notification', 'NotificationType'
 ]

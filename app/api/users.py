@@ -51,3 +51,35 @@ def change_password(
     db.commit()
     
     return {"message": "Password updated successfully"}
+
+class UserPublic(schemas.BaseModel):
+    id: int
+    username: str
+    role_name: str | None = None
+    
+    class Config:
+        from_attributes = True
+
+@router.get("/search", response_model=list[UserPublic])
+def search_users(
+    q: str = "",
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    query = db.query(models.User).filter(models.User.is_active == True)
+    if q:
+        query = query.filter(models.User.username.ilike(f"%{q}%"))
+    
+    users = query.limit(limit).all()
+    
+    # Map role_name manually if needed or via schema if eager loaded
+    result = []
+    for u in users:
+        result.append({
+            "id": u.id,
+            "username": u.username,
+            "role_name": u.role.name if u.role else None
+        })
+        
+    return result
