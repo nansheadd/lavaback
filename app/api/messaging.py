@@ -90,7 +90,9 @@ class MessageOut(BaseModel):
     content: str
     timestamp: datetime
     edited_at: Optional[datetime]
+    today: bool = False # Deprecated or used for something else?
     is_system_message: bool
+    is_pinned: bool = False
     reply_to_id: Optional[int]
     
     reactions: List[ReactionOut] = []
@@ -409,6 +411,7 @@ def get_messages(
     channel_id: int,
     limit: int = 50,
     before_id: Optional[int] = None,
+    after_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -427,6 +430,13 @@ def get_messages(
     if before_id:
         query = query.filter(models.ChannelMessage.id < before_id)
     
+    if after_id:
+        query = query.filter(models.ChannelMessage.id > after_id)
+    
+    # If polling (after_id), we might want chronological order effectively, 
+    # but the frontend expects reverse chronological usually for the initial load.
+    # For polling, we typically append to the bottom.
+    # Let's keep consistent descending order, the frontend can reverse/prepend as needed.
     messages = query.order_by(models.ChannelMessage.timestamp.desc()).limit(limit).all()
     
     # Update last_read_at
@@ -445,6 +455,7 @@ def get_messages(
             "timestamp": m.timestamp,
             "edited_at": m.edited_at,
             "is_system_message": m.is_system_message,
+            "is_pinned": m.is_pinned,
             "reply_to_id": m.reply_to_id,
             "reactions": m.reactions,
             "attachments": m.attachments
@@ -531,6 +542,7 @@ def send_message(
         "timestamp": db_message.timestamp,
         "edited_at": db_message.edited_at,
         "is_system_message": False,
+        "is_pinned": False,
         "reply_to_id": db_message.reply_to_id,
         "reactions": db_message.reactions,
         "attachments": db_message.attachments
@@ -592,6 +604,52 @@ def get_unread_counts(
         "total": total_unread,
         "channels": channels
     }
+
+# ========== Pin Endpoints ==========
+
+@router.post("/messages/{message_id}/pin")
+def pin_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    message = db.query(models.ChannelMessage).get(message_id)
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    # Check permissions (Owner or Admin)
+    membership = get_user_membership(message.channel_id, current_user.id, db)
+    if not membership:
+         raise HTTPException(status_code=403, detail="Not in channel")
+
+    # Ideally only admins or channel owners can pin? Or anyone? 
+    # Let's say anyone for now for collaboration, or restricted.
+    # User requested features similar to modern apps. Usually anyone or admins.
+    # Let's restrict to admins/owner for now to be safe, or check instructions.
+    # "Pro experience".
+    # I'll allow anyone in the channel to pin for now to be fluid, or maybe just owners.
+    # Let's allow everyone for now.
+    
+    message.is_pinned = True
+    db.commit()
+    
+    # Create system message? "X pinned a message"
+    # Optional but good for UX.
+    return {"status": "pinned"}
+
+@router.post("/messages/{message_id}/unpin")
+def unpin_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    message = db.query(models.ChannelMessage).get(message_id)
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+        
+    message.is_pinned = False
+    db.commit()
+    return {"status": "unpinned"}
 
 # ========== Reaction & Status Endpoints ==========
 

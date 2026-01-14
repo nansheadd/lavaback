@@ -358,6 +358,7 @@ class ChannelMessage(Base):
     edited_at = Column(DateTime(timezone=True), nullable=True)
     
     is_system_message = Column(Boolean, default=False)  # "X joined the channel"
+    is_pinned = Column(Boolean, default=False)
     reply_to_id = Column(Integer, ForeignKey("channel_messages.id"), nullable=True)  # Thread support
 
     channel = relationship("ChatChannel", back_populates="messages")

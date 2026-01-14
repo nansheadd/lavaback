@@ -51,6 +51,8 @@ from app.api.notifications import router as notifications_router
 app.include_router(notifications_router, prefix="/api")
 from app.api.apps import router as apps_router
 app.include_router(apps_router, prefix="/api")
+from app.api.database import router as database_router
+app.include_router(database_router, prefix="/api/database", tags=["database"])
 
 # Dependency
 def get_db():
