@@ -1,0 +1,76 @@
+import os
+from sqlalchemy import create_engine, text
+
+# Get DB URL
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+if not DATABASE_URL:
+    print("No DATABASE_URL set. Trying sqlite if available or exiting.")
+    # Fallback for testing if manual run locally
+    DATABASE_URL = "sqlite:///./platform.db"
+
+print(f"Connecting to DB...")
+engine = create_engine(DATABASE_URL)
+
+def run_fix():
+    with engine.connect() as conn:
+        # SQLite doesn't support isolation_level="AUTOCOMMIT" in the same way for schema changes sometimes,
+        # but for PG it's needed for some operations.
+        # However, for simple ALTER TABLE, standard transaction is fine.
+        # But let's try to be generic. 
+        if "postgresql" in DATABASE_URL:
+             conn = conn.execution_options(isolation_level="AUTOCOMMIT")
+
+        print("Starting schema fix...")
+
+        # 1. Add is_pinned to channel_messages
+        try:
+            print("Checking is_pinned...")
+            conn.execute(text("ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE;"))
+            print("is_pinned checked/added.")
+        except Exception as e:
+            print(f"Note on is_pinned: {e}")
+
+        # 2. Add reply_to_id to channel_messages
+        try:
+            print("Checking reply_to_id...")
+            conn.execute(text("ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES channel_messages(id);"))
+            print("reply_to_id checked/added.")
+        except Exception as e:
+            print(f"Note on reply_to_id: {e}")
+
+        # 3. Create message_reactions table
+        try:
+            print("Checking message_reactions table...")
+            # PG syntax for serial. SQLite uses INTEGER PRIMARY KEY AUTOINCREMENT
+            if "postgresql" in DATABASE_URL:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS message_reactions (
+                        id SERIAL PRIMARY KEY,
+                        message_id INTEGER REFERENCES channel_messages(id) ON DELETE CASCADE,
+                        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                        emoji VARCHAR NOT NULL,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                    );
+                """))
+            else:
+                 # SQLite syntax
+                 conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS message_reactions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        message_id INTEGER REFERENCES channel_messages(id) ON DELETE CASCADE,
+                        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                        emoji VARCHAR NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                """))
+            print("message_reactions checked/created.")
+        except Exception as e:
+            print(f"Error creating message_reactions: {e}")
+        
+        print("Schema fix complete.")
+
+if __name__ == "__main__":
+    run_fix()
