@@ -26,17 +26,36 @@ def run_fix():
         print("Starting schema fix...")
 
         # 1. Add is_pinned to channel_messages
+        print("Checking is_pinned...")
         try:
-            print("Checking is_pinned...")
-            conn.execute(text("ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE;"))
+            if "postgresql" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE;"))
+            else:
+                # SQLite fallback: catch duplicate column error
+                try:
+                    conn.execute(text("ALTER TABLE channel_messages ADD COLUMN is_pinned BOOLEAN DEFAULT FALSE;"))
+                except Exception as e:
+                    if "duplicate column" in str(e).lower():
+                        print("Column is_pinned already exists (SQLite).")
+                    else:
+                        raise e
             print("is_pinned checked/added.")
         except Exception as e:
             print(f"Note on is_pinned: {e}")
 
         # 2. Add reply_to_id to channel_messages
+        print("Checking reply_to_id...")
         try:
-            print("Checking reply_to_id...")
-            conn.execute(text("ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES channel_messages(id);"))
+            if "postgresql" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES channel_messages(id);"))
+            else:
+                try:
+                    conn.execute(text("ALTER TABLE channel_messages ADD COLUMN reply_to_id INTEGER REFERENCES channel_messages(id);"))
+                except Exception as e:
+                    if "duplicate column" in str(e).lower():
+                         print("Column reply_to_id already exists (SQLite).")
+                    else:
+                        raise e
             print("reply_to_id checked/added.")
         except Exception as e:
             print(f"Note on reply_to_id: {e}")

@@ -59,6 +59,83 @@ def get_tables(
         
     return tables_info
 
+@router.post("/tables")
+def create_table(
+    table_def: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_admin_access)
+):
+    """
+    Create a new dynamic table.
+    Payload: {
+        "name": "my_new_table",
+        "columns": [
+            {"name": "title", "type": "String", "nullable": False},
+            {"name": "count", "type": "Integer", "default": 0}
+        ]
+    }
+    """
+    table_name = table_def.get("name")
+    columns = table_def.get("columns", [])
+    
+    if not table_name:
+        raise HTTPException(status_code=400, detail="Table name is required")
+        
+    # Sanitize table name (basic alphanum check)
+    if not table_name.isidentifier():
+        raise HTTPException(status_code=400, detail="Invalid table name")
+
+    # Build CREATE TABLE statement
+    # Note: Using raw SQL for schema creation as sqlalchemy dynamic model creation is complex for persistence
+    # We want these tables to exist in the DB.
+    
+    # Check if exists
+    inspector = inspect(db.bind)
+    if table_name in inspector.get_table_names():
+        raise HTTPException(status_code=400, detail="Table already exists")
+        
+    has_pk = False
+    col_defs = []
+    
+    # Always add an ID Primary Key if not provided? 
+    # Let's enforce a standard ID serial/autoincrement for simplicity in this builder
+    col_defs.append("id SERIAL PRIMARY KEY" if "postgresql" in str(db.bind.engine.url) else "id INTEGER PRIMARY KEY AUTOINCREMENT")
+    
+    for col in columns:
+        c_name = col.get("name")
+        c_type = col.get("type", "String")
+        c_null = "NULL" if col.get("nullable", True) else "NOT NULL"
+        c_default = ""
+        
+        if not c_name or not c_name.isidentifier():
+             continue # Skip invalid columns
+             
+        # Map simple types to SQL
+        sql_type = "TEXT"
+        if c_type == "Integer": sql_type = "INTEGER"
+        elif c_type == "Boolean": sql_type = "BOOLEAN"
+        elif c_type == "DateTime": sql_type = "TIMESTAMP"
+        
+        if "default" in col:
+             def_val = col["default"]
+             if isinstance(def_val, str):
+                 c_default = f"DEFAULT '{def_val}'"
+             else:
+                 c_default = f"DEFAULT {def_val}"
+
+        col_defs.append(f"{c_name} {sql_type} {c_null} {c_default}")
+        
+    query = f"CREATE TABLE {table_name} ({', '.join(col_defs)});"
+    
+    try:
+        db.execute(text(query))
+        db.commit()
+        return {"success": True, "table": table_name}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/tables/{table_name}")
 def get_table_data(
     table_name: str,
