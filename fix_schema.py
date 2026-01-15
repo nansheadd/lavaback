@@ -88,6 +88,31 @@ def run_fix():
             print("message_reactions checked/created.")
         except Exception as e:
             print(f"Error creating message_reactions: {e}")
+
+        # 4. Update Projects table (App Builder fields)
+        print("Checking projects table schema...")
+        project_updates = [
+            ("logo_url", "VARCHAR", "TEXT"),
+            ("slogan", "VARCHAR", "TEXT"),
+            ("is_active", "BOOLEAN DEFAULT TRUE", "BOOLEAN DEFAULT 1"), 
+            ("global_styles", "TEXT DEFAULT '{}'", "TEXT DEFAULT '{}'")
+        ]
+
+        for col, pg_type, sqlite_type in project_updates:
+            try:
+                if "postgresql" in DATABASE_URL:
+                    conn.execute(text(f"ALTER TABLE projects ADD COLUMN IF NOT EXISTS {col} {pg_type};"))
+                else:
+                    try:
+                        conn.execute(text(f"ALTER TABLE projects ADD COLUMN {col} {sqlite_type};"))
+                    except Exception as e:
+                         if "duplicate column" in str(e).lower():
+                             print(f"Column {col} already exists (SQLite).")
+                         else:
+                             raise e
+                print(f"Column {col} checked/added.")
+            except Exception as e:
+                print(f"Error adding {col} to projects: {e}")
         
         print("Schema fix complete.")
 
