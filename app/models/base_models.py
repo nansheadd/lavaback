@@ -20,6 +20,13 @@ class Project(Base):
     summary = Column(Text, nullable=True)
     checklist = Column(Text, default="[]") # JSON string of completed checks
     settings = Column(Text, default="{}") # JSON settings for the app (tools enabled, theme, etc.)
+    
+    # App Builder Fields
+    logo_url = Column(String, nullable=True)
+    slogan = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    global_styles = Column(Text, default="{}") # CSS variables and global rules
+    
     created_at = Column(DateTime, default=datetime.utcnow)
 
     comments = relationship("Comment", back_populates="project", cascade="all, delete-orphan")

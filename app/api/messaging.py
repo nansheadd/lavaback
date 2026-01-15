@@ -5,6 +5,8 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import re
+import urllib.request
+from bs4 import BeautifulSoup
 from app import models, database
 from app.auth import get_current_user
 
@@ -782,3 +784,70 @@ def mark_message_read(
         db.commit()
     
     return {"status": "marked_read"}
+
+
+# ========== Link Preview ==========
+
+class LinkPreviewRequest(BaseModel):
+    url: str
+
+@router.post("/preview")
+def get_link_preview(request: LinkPreviewRequest, current_user: models.User = Depends(get_current_user)):
+    url = request.url
+    try:
+        # Basic validation
+        if not url.startswith("http"):
+            url = "https://" + url
+            
+        # Add User-Agent to avoid 403s
+        req = urllib.request.Request(
+            url, 
+            data=None, 
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
+            }
+        )
+        
+        with urllib.request.urlopen(req, timeout=5) as response:
+            html = response.read()
+            
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        title = soup.find("meta", property="og:title")
+        description = soup.find("meta", property="og:description")
+        image = soup.find("meta", property="og:image")
+        
+        # Fallbacks
+        if not title:
+            title = soup.title.string if soup.title else url
+        else:
+            title = title["content"]
+            
+        if not description:
+            description = soup.find("meta", attrs={"name": "description"})
+            description = description["content"] if description else ""
+        else:
+            description = description["content"]
+            
+        if not image:
+            image = "" # No fallback image for now, purely OG based
+        else:
+            image = image["content"]
+            
+        return {
+            "title": str(title)[:100],
+            "description": str(description)[:200],
+            "image": str(image),
+            "url": url,
+            "domain": urllib.parse.urlparse(url).netloc
+        }
+    except Exception as e:
+        print(f"Preview failed for {url}: {e}")
+        # Return partial data or error
+        return {
+            "title": url,
+            "description": "No preview available",
+            "image": "",
+            "url": url,
+            "domain": url
+        }
