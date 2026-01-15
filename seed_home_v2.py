@@ -116,30 +116,24 @@ def seed_home_v2():
         
         # Row 2: Hero
         widgets.append({
-            "i": "hero-1", "x": 0, "y": 3, "w": 24, "h": 12,
+            "i": "hero-1", "x": 0, "y": 3, "w": 24, "h": 14, # Taller Hero
             "toolId": "hero",
             "data": {
-                "title": "Bienvenue sur Lava",
-                "subtitle": "La plateforme ultime pour créer, apprendre et partager. Découvrez nos derniers articles ci-dessous.",
-                "buttonText": "En savoir plus",
-                "imageUrl": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80"
+                "title": "Analyses critiques & Perspectives",
+                "subtitle": "Lava est une revue belge d'analyse sociale et politique.",
+                "buttonText": "S'abonner",
+                "imageUrl": "https://images.unsplash.com/photo-1444653614773-8b83df53c566?q=80&w=2000&auto=format&fit=crop" # More textured/darker image
             }
         })
         
-        # Row 3: Article List Header
+        # Row 3: Article List (Directly after Hero)
         widgets.append({
-            "i": "header-articles", "x": 0, "y": 15, "w": 24, "h": 4,
-            "toolId": "features", # Using features/text as header placeholder or just header
-            "data": { "title": "Derniers Articles" }
-        })
-
-        # Row 4: Article List
-        widgets.append({
-            "i": "article-list-1", "x": 0, "y": 19, "w": 24, "h": 16,
+            "i": "article-list-1", "x": 0, "y": 17, "w": 24, "h": 20,
             "toolId": "article-list",
             "data": {
-                "limit": 3,
-                "layout": "grid"
+                "limit": 6, # More articles
+                "layout": "grid",
+                "title": "Dernières Publications" # Built-in title in tool
             }
         })
         

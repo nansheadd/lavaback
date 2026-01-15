@@ -84,6 +84,14 @@ class MessageCreate(BaseModel):
     attachment_name: Optional[str] = None
     attachment_size: Optional[int] = None
 
+class MessageSummary(BaseModel):
+    id: int
+    content: str
+    username: str
+    
+    class Config:
+        from_attributes = True
+
 class MessageOut(BaseModel):
     id: int
     channel_id: int
@@ -96,6 +104,7 @@ class MessageOut(BaseModel):
     is_system_message: bool
     is_pinned: bool = False
     reply_to_id: Optional[int]
+    reply_to: Optional[MessageSummary] = None
     
     reactions: List[ReactionOut] = []
     attachments: List[AttachmentOut] = []
