@@ -468,6 +468,11 @@ def get_messages(
             "is_system_message": m.is_system_message,
             "is_pinned": m.is_pinned,
             "reply_to_id": m.reply_to_id,
+            "reply_to": {
+                "id": m.reply_to.id,
+                "content": m.reply_to.content,
+                "username": m.reply_to.user.username if m.reply_to.user else "System"
+            } if m.reply_to else None,
             "reactions": m.reactions,
             "attachments": m.attachments
         })
@@ -555,6 +560,11 @@ def send_message(
         "is_system_message": False,
         "is_pinned": False,
         "reply_to_id": db_message.reply_to_id,
+        "reply_to": {
+            "id": db_message.reply_to.id,
+            "content": db_message.reply_to.content,
+            "username": db_message.reply_to.user.username if db_message.reply_to.user else "System"
+        } if db_message.reply_to else None,
         "reactions": db_message.reactions,
         "attachments": db_message.attachments
     }
