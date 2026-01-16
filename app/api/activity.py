@@ -28,7 +28,7 @@ class ActivityLogOut(BaseModel):
     class Config:
         orm_mode = True
 
-@router.get("/", response_model=List[ActivityLogOut])
+@router.get("", response_model=List[ActivityLogOut])
 def get_activity_logs(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
     """
     Get global activity logs, ordered by timestamp desc.
