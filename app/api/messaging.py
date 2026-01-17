@@ -38,6 +38,7 @@ class ChannelOut(BaseModel):
     slug: str
     description: Optional[str]
     channel_type: str
+    project_id: Optional[int] = None
     created_by: Optional[int]
     created_at: datetime
     is_archived: bool

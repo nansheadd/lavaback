@@ -38,6 +38,9 @@ class Project(ProjectBase):
     id: int
     created_at: datetime
     comments: List[Comment] = []
+    
+    steps_total: int = 0
+    steps_completed: int = 0
 
     class Config:
         from_attributes = True

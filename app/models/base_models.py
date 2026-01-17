@@ -31,6 +31,20 @@ class Project(Base):
 
     comments = relationship("Comment", back_populates="project", cascade="all, delete-orphan")
     app_users = relationship("AppUser", back_populates="project", cascade="all, delete-orphan")
+    steps = relationship("ProjectStep", back_populates="project", cascade="all, delete-orphan")
+
+class ProjectStep(Base):
+    __tablename__ = "project_steps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    title = Column(String)
+    is_validated = Column(Boolean, default=False)
+    order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("Project", back_populates="steps")
+    reviews = relationship("ReviewThread", back_populates="step")
 
 class ActivityLog(Base):
     __tablename__ = "activity_logs"
@@ -75,6 +89,9 @@ class ReviewThread(Base):
     category = Column(String, default="comment") # "bug", "design", "question", "comment"
     status = Column(String, default="open") 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    step_id = Column(Integer, ForeignKey("project_steps.id"), nullable=True)
+    
+    step = relationship("ProjectStep", back_populates="reviews")
 
     comments = relationship("ReviewComment", back_populates="thread", cascade="all, delete-orphan")
 
@@ -312,6 +329,7 @@ class ChannelType(str, enum.Enum):
     PUBLIC = "public"
     PRIVATE = "private"
     DIRECT = "direct"  # DM between 2 users
+    PROJECT = "project" # Project Channel
 
 class ChatChannel(Base):
     __tablename__ = "chat_channels"
@@ -321,6 +339,7 @@ class ChatChannel(Base):
     slug = Column(String, unique=True, index=True)
     description = Column(Text, nullable=True)
     channel_type = Column(String, default=ChannelType.PUBLIC.value)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

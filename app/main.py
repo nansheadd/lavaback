@@ -53,6 +53,12 @@ from app.api.apps import router as apps_router
 app.include_router(apps_router, prefix="/api")
 from app.api.database import router as database_router
 app.include_router(database_router, prefix="/api/database", tags=["database"])
+from app.api.app_database import router as app_database_router
+app.include_router(app_database_router, prefix="/api", tags=["app-database"])
+from app.api.app_auth import router as app_auth_router
+app.include_router(app_auth_router, prefix="/api", tags=["app-auth"])
+from app.api.project_channel import router as project_channel_router
+app.include_router(project_channel_router, prefix="/api", tags=["project-channel"])
 
 # Dependency
 def get_db():
@@ -294,7 +300,14 @@ def post_chat_message(msg: ChatMessageCreate, db: Session = Depends(get_db), cur
 
 @app.get("/api/projects", response_model=list[schemas.Project])
 def read_projects(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    projects = db.query(models.Project).offset(skip).limit(limit).all()
+    from sqlalchemy.orm import joinedload
+    projects = db.query(models.Project).options(joinedload(models.Project.steps)).offset(skip).limit(limit).all()
+    
+    # Compute virtual fields
+    for p in projects:
+        p.steps_total = len(p.steps)
+        p.steps_completed = len([s for s in p.steps if s.is_validated])
+        
     return projects
 
 @app.post("/api/projects", response_model=schemas.Project)

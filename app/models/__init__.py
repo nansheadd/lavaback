@@ -15,7 +15,9 @@ from .base_models import (
     # Messaging
     ChannelType, ChatChannel, MemberRole, ChannelMember, ChannelMessage,
     MessageReaction, MessageAttachment,
-    Notification, NotificationType
+    Notification, NotificationType,
+    # New Project Steps
+    ProjectStep
 )
 
 # Workflow models
@@ -36,6 +38,7 @@ __all__ = [
     'Workflow', 'WorkflowExecution',
     'BuilderPage',
     'Article', 'ArticleStatus', 'ArticleReview',
+    'ProjectStep',
     # E-Commerce
     'ProductCategory', 'ProductType', 'Product',
     'SubscriptionInterval', 'SubscriptionPlan',
