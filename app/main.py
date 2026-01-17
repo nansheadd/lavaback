@@ -362,6 +362,17 @@ def update_project(
     db.refresh(project)
     return project
 
+@app.delete("/api/projects/{project_id}")
+def delete_project(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Dependencies (like steps, comments) are handled by cascade="all, delete-orphan" in models
+    db.delete(project)
+    db.commit()
+    return {"message": "Project deleted successfully"}
+
 @app.get("/api/activity-logs", response_model=list[schemas.ActivityLog])
 def read_activity_logs(limit: int = 10, db: Session = Depends(get_db)):
     logs = db.query(models.ActivityLog).order_by(models.ActivityLog.timestamp.desc()).limit(limit).all()
@@ -652,6 +663,196 @@ async def startup_event():
             # hashed_pw = get_password_hash("admin")
             # admin_user.hashed_password = hashed_pw
             pass
+
+        # --- SEED LAVA PORTAL (App Builder Demo) ---
+        # --- SEED LAVA PORTAL (App Builder Demo) ---
+        portal_project = db.query(models.Project).filter(models.Project.title == "Lava Portal").first()
+        if not portal_project:
+            print("Creating 'Lava Portal' Project...")
+            portal_project = models.Project(
+                title="Lava Portal",
+                description="CMS for Journalists with Auth & Roles",
+                status="IN_PROGRESS",
+                logo_url="https://api.iconify.design/fluent-emoji:volcano.svg",
+                settings='{"theme": "modern"}'
+            )
+            db.add(portal_project)
+            db.commit()
+            db.refresh(portal_project)
+        else:
+            print(f"Project 'Lava Portal' found (ID: {portal_project.id}). Checking content...")
+            
+        # Create Dynamic Tables (Idempotent)
+        portal_id = portal_project.id
+        print(f"Lava Portal Project ID: {portal_id}")
+
+        # 1. Users Table
+        users_table = f"app_{portal_id}_users"
+        if not inspector.has_table(users_table):
+            with database.engine.connect() as conn:
+                conn.execute(text(f"""
+                    CREATE TABLE {users_table} (
+                        id SERIAL PRIMARY KEY,
+                        username VARCHAR(50) UNIQUE NOT NULL,
+                        email VARCHAR(100) UNIQUE NOT NULL,
+                        hashed_password VARCHAR(255) NOT NULL,
+                        role VARCHAR(20) DEFAULT 'user',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.commit()
+            print(f"Created table {users_table}")
+            
+        # 2. Articles Table
+        articles_table = f"app_{portal_id}_articles"
+        if not inspector.has_table(articles_table):
+            with database.engine.connect() as conn:
+                conn.execute(text(f"""
+                    CREATE TABLE {articles_table} (
+                        id SERIAL PRIMARY KEY,
+                        title VARCHAR(255) NOT NULL,
+                        slug VARCHAR(255) UNIQUE NOT NULL,
+                        content TEXT,
+                        excerpt TEXT,
+                        cover_image VARCHAR(500),
+                        status VARCHAR(20) DEFAULT 'DRAFT',
+                        category VARCHAR(50),
+                        author_id INTEGER REFERENCES {users_table}(id),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.commit()
+            print(f"Created table {articles_table}")
+
+        # Seed Journalist User
+        journalist_pw = get_password_hash("password")
+        with database.engine.connect() as conn:
+            # Check if exists
+            res = conn.execute(text(f"SELECT id FROM {users_table} WHERE username='journaliste'")).fetchone()
+            if not res:
+                conn.execute(text(f"""
+                    INSERT INTO {users_table} (username, email, hashed_password, role)
+                    VALUES ('journaliste', 'journaliste@lava.com', '{journalist_pw}', 'journalist')
+                """))
+                conn.commit()
+                print("Seeded 'journaliste' user in Portal.")
+
+        # Seed Initial Article
+        with database.engine.connect() as conn:
+            # Simple check if table is empty or specific article exists
+            res = conn.execute(text(f"SELECT id FROM {articles_table} WHERE slug='bienvenue'")).fetchone()
+            if not res:
+                conn.execute(text(f"""
+                    INSERT INTO {articles_table} (title, slug, content, status, category, author_id)
+                    VALUES (
+                        'Bienvenue sur Lava Portal', 
+                        'bienvenue', 
+                        '<p>Ceci est votre premier article de démonstration.</p>', 
+                        'PUBLISHED', 
+                        'News',
+                        (SELECT id FROM {users_table} WHERE username='journaliste')
+                    )
+                """))
+                conn.commit()
+                print("Seeded initial article.")
+
+        # Seed Pages (Idempotent Check by slug)
+        
+        # 1. HOME Page (Public Landing)
+        home_page = db.query(models.BuilderPage).filter(models.BuilderPage.project_id == portal_id, models.BuilderPage.slug == 'home').first()
+        if not home_page:
+            print("Creating Home page...")
+            home_page = models.BuilderPage(
+                name="Accueil",
+                slug="home",
+                project_id=portal_id,
+                widgets_json='[{"id":"nav-home","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-home","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/login","variant":"button-outline"},{"label":"Inscription","href":"/register","variant":"button-primary"}]}}, {"id":"hero-home","type":"hero","w":24,"h":12,"x":0,"y":3,"i":"hero-home","data":{"title":"Lava Portal","subtitle":"La plateforme de journalisme nouvelle génération.","buttonText":"Rejoindre la rédaction","imageUrl":"https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=2070","actionTarget":"/register"}}, {"id":"articles-home","type":"article-list","w":24,"h":12,"x":0,"y":15,"i":"articles-home","data":{"title":"Derniers Articles","limit":3,"layout":"grid","mode":"public"}}]',
+                is_published=True,
+                access_level="public"
+            )
+            db.add(home_page)
+        else:
+            # OPTIONAL: Force update if exists to fix user's "empty" state
+            print("Updating Home page widgets...")
+            home_page.widgets_json = '[{"id":"nav-home","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-home","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/login","variant":"button-outline"},{"label":"Inscription","href":"/register","variant":"button-primary"}]}}, {"id":"hero-home","type":"hero","w":24,"h":12,"x":0,"y":3,"i":"hero-home","data":{"title":"Lava Portal","subtitle":"La plateforme de journalisme nouvelle génération.","buttonText":"Rejoindre la rédaction","imageUrl":"https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=2070","actionTarget":"/register"}}, {"id":"articles-home","type":"article-list","w":24,"h":12,"x":0,"y":15,"i":"articles-home","data":{"title":"Derniers Articles","limit":3,"layout":"grid","mode":"public"}}]'
+            db.add(home_page)
+
+        # 2. Login Page
+        login_widgets = '[{"id":"login-form-1","type":"login-form","w":12,"h":12,"x":6,"y":4,"i":"login-form-1","data":{"title":"Connexion Portail", "registerLink":"/register"}}, {"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Inscription","href":"/register","variant":"button-primary"}]}}]'
+        login_page = db.query(models.BuilderPage).filter(models.BuilderPage.project_id == portal_id, models.BuilderPage.slug == 'login').first()
+        if not login_page:
+            login_page = models.BuilderPage(
+                name="Login",
+                slug="login",
+                project_id=portal_id,
+                widgets_json=login_widgets,
+                is_published=True,
+                access_level="public"
+            )
+            db.add(login_page)
+            print("Seeded Login page.")
+        else:
+             login_page.widgets_json = login_widgets
+             db.add(login_page)
+        
+        # 3. Register Page
+        register_widgets = '[{"id":"reg-form-1","type":"register-form","w":12,"h":14,"x":6,"y":4,"i":"reg-form-1","data":{"title":"Créer un compte", "loginLink":"/login"}}, {"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/login","variant":"button-outline"}]}}]'
+        register_page = db.query(models.BuilderPage).filter(models.BuilderPage.project_id == portal_id, models.BuilderPage.slug == 'register').first()
+        if not register_page:
+            register_page = models.BuilderPage(
+                name="Inscription",
+                slug="register",
+                project_id=portal_id,
+                widgets_json=register_widgets,
+                is_published=True,
+                access_level="public"
+            )
+            db.add(register_page)
+            print("Seeded Register page.")
+        else:
+            register_page.widgets_json = register_widgets
+            db.add(register_page)
+        
+        # 4. Dashboard (Protected)
+        dashboard_widgets = '[{"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Dashboard","href":"/dashboard"},{"label":"Déconnexion","href":"/logout","variant":"button-outline"}]}}, {"id":"article-list-1","type":"article-list","w":24,"h":12,"x":0,"y":3,"i":"article-list-1","data":{"title":"Mes Articles","limit":10,"layout":"list", "mode": "admin"}}]'
+        dashboard_page = db.query(models.BuilderPage).filter(models.BuilderPage.project_id == portal_id, models.BuilderPage.slug == 'dashboard').first()
+        if not dashboard_page:
+            dashboard_page = models.BuilderPage(
+                name="Dashboard",
+                slug="dashboard",
+                project_id=portal_id,
+                widgets_json=dashboard_widgets,
+                is_published=True,
+                access_level="protected", 
+                allowed_roles='["journalist", "admin"]'
+            )
+            db.add(dashboard_page)
+            print("Seeded Dashboard page.")
+        else:
+            dashboard_page.widgets_json = dashboard_widgets
+            db.add(dashboard_page)
+
+        # 5. Editor (Protected)
+        editor_widgets = '[{"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal"}}, {"id":"editor-1","type":"article-editor","w":24,"h":20,"x":0,"y":3,"i":"editor-1","data":{}}]'
+        editor_page = db.query(models.BuilderPage).filter(models.BuilderPage.project_id == portal_id, models.BuilderPage.slug == 'editor').first()
+        if not editor_page:
+            editor_page = models.BuilderPage(
+                name="Editor",
+                slug="editor",
+                project_id=portal_id,
+                widgets_json=editor_widgets,
+                is_published=True,
+                access_level="protected",
+                allowed_roles='["journalist", "admin"]'
+            )
+            db.add(editor_page)
+            print("Seeded Editor page.")
+        else:
+            editor_page.widgets_json = editor_widgets
+            db.add(editor_page)
+
+        db.commit()
 
     finally:
         db.close()
