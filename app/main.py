@@ -573,32 +573,9 @@ async def startup_event():
         import json
         
         # 1. Home Page
-        home_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == "home").first()
-        if not home_page:
-            print("Seeding 'Home' page...")
-            db.add(models.BuilderPage(
-                name="Home", 
-                slug="home", 
-                description="Journal Home Page / Landing Page",
-                widgets_json="[]", 
-                is_published=True,
-                access_level="public"
-            ))
-            db.commit()
-
-        # 2. Article Template Page
-        article_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == "article").first()
-        if not article_page:
-            print("Seeding 'Article Template' page...")
-            db.add(models.BuilderPage(
-                name="Article Template", 
-                slug="article", 
-                description="Template for displaying single articles",
-                widgets_json="[]", 
-                is_published=True,
-                access_level="public"
-            ))
-            db.commit()
+        # 1. Home Page & Article Template (Legacy - Removed to favor Portal Project)
+        # These are now handled within the Lava Portal project seeding below.
+        pass
 
         # --- Deployment Log Check ---
         # Check if we already logged this version
@@ -762,22 +739,29 @@ async def startup_event():
         # Seed Pages (Idempotent Check by slug)
         
         # 1. HOME Page (Public Landing)
-        home_page = db.query(models.BuilderPage).filter(models.BuilderPage.project_id == portal_id, models.BuilderPage.slug == 'home').first()
+        # 1. HOME Page (Public Landing)
+        home_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'home').first()
+        
+        portal_home_widgets = '[{"id":"nav-home","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-home","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/login","variant":"button-outline"},{"label":"Inscription","href":"/register","variant":"button-primary"}]}}, {"id":"hero-home","type":"hero","w":24,"h":12,"x":0,"y":3,"i":"hero-home","data":{"title":"Lava Portal","subtitle":"La plateforme de journalisme nouvelle génération.","buttonText":"Rejoindre la rédaction","imageUrl":"https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=2070","actionTarget":"/register"}}, {"id":"articles-home","type":"article-list","w":24,"h":12,"x":0,"y":15,"i":"articles-home","data":{"title":"Derniers Articles","limit":3,"layout":"grid","mode":"public"}}]'
+
         if not home_page:
             print("Creating Home page...")
             home_page = models.BuilderPage(
                 name="Accueil",
                 slug="home",
                 project_id=portal_id,
-                widgets_json='[{"id":"nav-home","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-home","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/login","variant":"button-outline"},{"label":"Inscription","href":"/register","variant":"button-primary"}]}}, {"id":"hero-home","type":"hero","w":24,"h":12,"x":0,"y":3,"i":"hero-home","data":{"title":"Lava Portal","subtitle":"La plateforme de journalisme nouvelle génération.","buttonText":"Rejoindre la rédaction","imageUrl":"https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=2070","actionTarget":"/register"}}, {"id":"articles-home","type":"article-list","w":24,"h":12,"x":0,"y":15,"i":"articles-home","data":{"title":"Derniers Articles","limit":3,"layout":"grid","mode":"public"}}]',
+                widgets_json=portal_home_widgets,
                 is_published=True,
                 access_level="public"
             )
             db.add(home_page)
         else:
-            # OPTIONAL: Force update if exists to fix user's "empty" state
-            print("Updating Home page widgets...")
-            home_page.widgets_json = '[{"id":"nav-home","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-home","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/login","variant":"button-outline"},{"label":"Inscription","href":"/register","variant":"button-primary"}]}}, {"id":"hero-home","type":"hero","w":24,"h":12,"x":0,"y":3,"i":"hero-home","data":{"title":"Lava Portal","subtitle":"La plateforme de journalisme nouvelle génération.","buttonText":"Rejoindre la rédaction","imageUrl":"https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=2070","actionTarget":"/register"}}, {"id":"articles-home","type":"article-list","w":24,"h":12,"x":0,"y":15,"i":"articles-home","data":{"title":"Derniers Articles","limit":3,"layout":"grid","mode":"public"}}]'
+            # Adopt existing page if needed and update content
+            print(f"Updating/Adopting Home page (ID: {home_page.id})...")
+            home_page.project_id = portal_id
+            home_page.widgets_json = portal_home_widgets
+            home_page.name = "Accueil" # Ensure correct name
+            home_page.is_published = True
             db.add(home_page)
 
         # 2. Login Page
