@@ -10,3 +10,4 @@ passlib[argon2]
 argon2-cffi
 alembic
 lxml
+email-validator
