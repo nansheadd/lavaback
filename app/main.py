@@ -14,6 +14,7 @@ from app.api.messaging import router as messaging_router
 from app.api.upload import router as upload_router
 from app.api.users import router as users_router
 from app.api.roles import router as roles_router
+from app.api import dynamic_data
 import uvicorn
 import shutil
 import os
@@ -47,6 +48,7 @@ app.include_router(messaging_router, prefix="/api", tags=["messaging"])
 app.include_router(upload_router, prefix="/api", tags=["upload"])
 app.include_router(users_router, prefix="/api/users", tags=["users"])
 app.include_router(roles_router, prefix="/api")
+app.include_router(dynamic_data.router, prefix="/api", tags=["Dynamic Data"])
 from app.api.notifications import router as notifications_router
 app.include_router(notifications_router, prefix="/api")
 from app.api.apps import router as apps_router
