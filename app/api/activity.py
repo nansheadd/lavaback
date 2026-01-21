@@ -26,7 +26,7 @@ class ActivityLogOut(BaseModel):
     # Optionally include user name if needed (simple for now)
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 @router.get("", response_model=List[ActivityLogOut])
 def get_activity_logs(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
