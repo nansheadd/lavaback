@@ -88,10 +88,13 @@ class ReviewThread(Base):
     context_type = Column(String, default="text") # "text" or "point"
     category = Column(String, default="comment") # "bug", "design", "question", "comment"
     status = Column(String, default="open") 
+    status = Column(String, default="open") 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     step_id = Column(Integer, ForeignKey("project_steps.id"), nullable=True)
+    chat_thread_id = Column(Integer, ForeignKey("channel_messages.id"), nullable=True) # Link to Chat
     
     step = relationship("ProjectStep", back_populates="reviews")
+    chat_thread = relationship("ChannelMessage") # Relationship to ChatMessage
 
     comments = relationship("ReviewComment", back_populates="thread", cascade="all, delete-orphan")
 

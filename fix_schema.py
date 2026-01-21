@@ -131,6 +131,43 @@ def run_fix():
         except Exception as e:
             print(f"Error adding project_id to chat_channels: {e}")
 
+        # 6. Add step_id to review_threads
+        print("Checking review_threads schema...")
+        try:
+            if "postgresql" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE review_threads ADD COLUMN IF NOT EXISTS step_id INTEGER REFERENCES project_steps(id);"))
+            else:
+                try:
+                    conn.execute(text("ALTER TABLE review_threads ADD COLUMN step_id INTEGER REFERENCES project_steps(id);"))
+                except Exception as e:
+                     if "duplicate column" in str(e).lower():
+                         print("Column step_id already exists in review_threads (SQLite).")
+                     else:
+                         raise e
+            print("review_threads step_id checked/added.")
+        except Exception as e:
+            print(f"Error adding step_id to review_threads: {e}")
+
+        except Exception as e:
+            print(f"Error adding step_id to review_threads: {e}")
+
+        # 7. Add chat_thread_id to review_threads
+        print("Checking review_threads schema (chat_thread_id)...")
+        try:
+            if "postgresql" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE review_threads ADD COLUMN IF NOT EXISTS chat_thread_id INTEGER REFERENCES channel_messages(id);"))
+            else:
+                try:
+                    conn.execute(text("ALTER TABLE review_threads ADD COLUMN chat_thread_id INTEGER REFERENCES channel_messages(id);"))
+                except Exception as e:
+                     if "duplicate column" in str(e).lower():
+                         print("Column chat_thread_id already exists in review_threads (SQLite).")
+                     else:
+                         raise e
+            print("review_threads chat_thread_id checked/added.")
+        except Exception as e:
+            print(f"Error adding chat_thread_id to review_threads: {e}")
+
         print("Schema fix complete.")
 
 if __name__ == "__main__":

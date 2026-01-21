@@ -403,8 +403,41 @@ def read_comments(project_id: int, db: Session = Depends(get_db)):
 
 # Review Endpoints
 @app.post("/api/projects/{project_id}/reviews", response_model=schemas.ReviewThread)
-def create_review_thread(project_id: int, review: schemas.ReviewThreadCreate, db: Session = Depends(get_db)):
+def create_review_thread(
+    project_id: int, 
+    review: schemas.ReviewThreadCreate, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # 1. Create the ReviewThread
     db_review = models.ReviewThread(**review.model_dump(), project_id=project_id)
+    
+    # 2. Sync with Chat
+    try:
+        # Find the project channel
+        channel = db.query(models.ChatChannel).filter(
+            models.ChatChannel.project_id == project_id
+        ).order_by(models.ChatChannel.created_at.asc()).first() # Get the first/main one
+
+        if channel:
+            # Create a message in the chat
+            msg_content = f"📌 **Review Started** ({review.category})\nContext: {review.selection_text or 'No text selected'}"
+            
+            chat_msg = models.ChannelMessage(
+                channel_id=channel.id,
+                user_id=current_user.id, # The user starting the review
+                content=msg_content,
+                is_system_message=False # It's a user action, but specialized styling in UI might be needed via Markdown
+            )
+            db.add(chat_msg)
+            db.flush() # Get ID
+            
+            # Link review to this message
+            db_review.chat_thread_id = chat_msg.id
+            
+    except Exception as e:
+        print(f"Error syncing review to chat: {e}")
+
     db.add(db_review)
     db.commit()
     db.refresh(db_review)
@@ -428,6 +461,26 @@ def create_review_comment(
         author_name=current_user.username
     )
     db.add(db_comment)
+    
+    # --- SYNC WITH CHAT ---
+    try:
+        # Get the thread to find the linked chat message
+        thread = db.query(models.ReviewThread).filter(models.ReviewThread.id == thread_id).first()
+        if thread and thread.chat_thread_id:
+            # Find the channel of the root message
+            root_msg = db.query(models.ChannelMessage).filter(models.ChannelMessage.id == thread.chat_thread_id).first()
+            if root_msg:
+                # Create reply in chat
+                reply_msg = models.ChannelMessage(
+                    channel_id=root_msg.channel_id,
+                    user_id=current_user.id,
+                    content=comment.content, # Exact content sync
+                    reply_to_id=thread.chat_thread_id
+                )
+                db.add(reply_msg)
+    except Exception as e:
+        print(f"Error syncing review comment to chat: {e}")
+
     db.commit()
     db.refresh(db_comment)
     return db_comment
