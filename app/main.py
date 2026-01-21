@@ -742,8 +742,11 @@ async def startup_event():
         # 1. HOME Page (Public Landing)
         home_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'home').first()
         
+        # 1. HOME Page (Public Landing)
         portal_home_widgets = '[{"id":"nav-home","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-home","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/login","variant":"button-outline"},{"label":"Inscription","href":"/register","variant":"button-primary"}]}}, {"id":"hero-home","type":"hero","w":24,"h":12,"x":0,"y":3,"i":"hero-home","data":{"title":"Lava Portal","subtitle":"La plateforme de journalisme nouvelle génération.","buttonText":"Rejoindre la rédaction","imageUrl":"https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=2070","actionTarget":"/register"}}, {"id":"articles-home","type":"article-list","w":24,"h":12,"x":0,"y":15,"i":"articles-home","data":{"title":"Derniers Articles","limit":3,"layout":"grid","mode":"public"}}]'
 
+        home_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'home').first()
+        
         if not home_page:
             print("Creating Home page...")
             home_page = models.BuilderPage(
@@ -766,7 +769,7 @@ async def startup_event():
 
         # 2. Login Page
         login_widgets = '[{"id":"login-form-1","type":"login-form","w":12,"h":12,"x":6,"y":4,"i":"login-form-1","data":{"title":"Connexion Portail", "registerLink":"/register"}}, {"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Inscription","href":"/register","variant":"button-primary"}]}}]'
-        login_page = db.query(models.BuilderPage).filter(models.BuilderPage.project_id == portal_id, models.BuilderPage.slug == 'login').first()
+        login_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'login').first()
         if not login_page:
             login_page = models.BuilderPage(
                 name="Login",
@@ -779,12 +782,13 @@ async def startup_event():
             db.add(login_page)
             print("Seeded Login page.")
         else:
+             login_page.project_id = portal_id
              login_page.widgets_json = login_widgets
              db.add(login_page)
         
         # 3. Register Page
         register_widgets = '[{"id":"reg-form-1","type":"register-form","w":12,"h":14,"x":6,"y":4,"i":"reg-form-1","data":{"title":"Créer un compte", "loginLink":"/login"}}, {"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/login","variant":"button-outline"}]}}]'
-        register_page = db.query(models.BuilderPage).filter(models.BuilderPage.project_id == portal_id, models.BuilderPage.slug == 'register').first()
+        register_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'register').first()
         if not register_page:
             register_page = models.BuilderPage(
                 name="Inscription",
@@ -797,12 +801,13 @@ async def startup_event():
             db.add(register_page)
             print("Seeded Register page.")
         else:
+            register_page.project_id = portal_id
             register_page.widgets_json = register_widgets
             db.add(register_page)
         
         # 4. Dashboard (Protected)
         dashboard_widgets = '[{"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Dashboard","href":"/dashboard"},{"label":"Déconnexion","href":"/logout","variant":"button-outline"}]}}, {"id":"article-list-1","type":"article-list","w":24,"h":12,"x":0,"y":3,"i":"article-list-1","data":{"title":"Mes Articles","limit":10,"layout":"list", "mode": "admin"}}]'
-        dashboard_page = db.query(models.BuilderPage).filter(models.BuilderPage.project_id == portal_id, models.BuilderPage.slug == 'dashboard').first()
+        dashboard_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'dashboard').first()
         if not dashboard_page:
             dashboard_page = models.BuilderPage(
                 name="Dashboard",
@@ -816,12 +821,13 @@ async def startup_event():
             db.add(dashboard_page)
             print("Seeded Dashboard page.")
         else:
+            dashboard_page.project_id = portal_id
             dashboard_page.widgets_json = dashboard_widgets
             db.add(dashboard_page)
 
         # 5. Editor (Protected)
         editor_widgets = '[{"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal"}}, {"id":"editor-1","type":"article-editor","w":24,"h":20,"x":0,"y":3,"i":"editor-1","data":{}}]'
-        editor_page = db.query(models.BuilderPage).filter(models.BuilderPage.project_id == portal_id, models.BuilderPage.slug == 'editor').first()
+        editor_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'editor').first()
         if not editor_page:
             editor_page = models.BuilderPage(
                 name="Editor",
@@ -835,9 +841,9 @@ async def startup_event():
             db.add(editor_page)
             print("Seeded Editor page.")
         else:
+            editor_page.project_id = portal_id
             editor_page.widgets_json = editor_widgets
             db.add(editor_page)
-
         db.commit()
 
     finally:
