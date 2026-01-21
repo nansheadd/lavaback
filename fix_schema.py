@@ -114,6 +114,23 @@ def run_fix():
             except Exception as e:
                 print(f"Error adding {col} to projects: {e}")
         
+        # 5. Add project_id to chat_channels
+        print("Checking chat_channels schema...")
+        try:
+            if "postgresql" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE chat_channels ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE;"))
+            else:
+                try:
+                    conn.execute(text("ALTER TABLE chat_channels ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE;"))
+                except Exception as e:
+                     if "duplicate column" in str(e).lower():
+                         print("Column project_id already exists in chat_channels (SQLite).")
+                     else:
+                         raise e
+            print("chat_channels project_id checked/added.")
+        except Exception as e:
+            print(f"Error adding project_id to chat_channels: {e}")
+
         print("Schema fix complete.")
 
 if __name__ == "__main__":
