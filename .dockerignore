@@ -1,0 +1,37 @@
+# Python virtual environments
+venv/
+.venv/
+env/
+env.bak/
+venv.bak/
+
+# Environment variables
+.env
+
+# Git
+.git/
+.gitignore
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+.eggs/
+
+# Database files
+*.db
+*.sqlite3
+platform.db
+
+# Deployment / OS
+.DS_Store
+Thumbs.db
+Dockerfile
+.dockerignore
+
+# Uploads
+app/uploads/
