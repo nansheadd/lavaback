@@ -797,7 +797,7 @@ async def startup_event():
             with database.engine.connect() as conn:
                 conn.execute(text(f"""
                     CREATE TABLE {users_table} (
-                        id SERIAL PRIMARY KEY,
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
                         username VARCHAR(50) UNIQUE NOT NULL,
                         email VARCHAR(100) UNIQUE NOT NULL,
                         hashed_password VARCHAR(255) NOT NULL,
@@ -814,7 +814,7 @@ async def startup_event():
             with database.engine.connect() as conn:
                 conn.execute(text(f"""
                     CREATE TABLE {articles_table} (
-                        id SERIAL PRIMARY KEY,
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
                         title VARCHAR(255) NOT NULL,
                         slug VARCHAR(255) UNIQUE NOT NULL,
                         content TEXT,
@@ -868,8 +868,7 @@ async def startup_event():
         # 1. HOME Page (Public Landing)
         home_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'home').first()
         
-        # 1. HOME Page (Public Landing)
-        portal_home_widgets = '[{"id":"nav-home","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-home","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/login","variant":"button-outline"},{"label":"Inscription","href":"/register","variant":"button-primary"}]}}, {"id":"hero-home","type":"hero","w":24,"h":12,"x":0,"y":3,"i":"hero-home","data":{"title":"Lava Portal","subtitle":"La plateforme de journalisme nouvelle génération.","buttonText":"Rejoindre la rédaction","imageUrl":"https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=2070","actionTarget":"/register"}}, {"id":"articles-home","type":"article-list","w":24,"h":12,"x":0,"y":15,"i":"articles-home","data":{"title":"Derniers Articles","limit":3,"layout":"grid","mode":"public"}}]'
+        portal_home_widgets = '[{"id":"nav-home","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-home","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/app-login","variant":"button-outline"},{"label":"Inscription","href":"/app-register","variant":"button-primary"}]}}, {"id":"hero-home","type":"hero","w":24,"h":12,"x":0,"y":3,"i":"hero-home","data":{"title":"Lava Portal","subtitle":"La plateforme de journalisme nouvelle génération.","buttonText":"Rejoindre la rédaction","imageUrl":"https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=2070","actionTarget":"/app-register"}}, {"id":"articles-home","type":"article-list","w":24,"h":12,"x":0,"y":15,"i":"articles-home","data":{"title":"Derniers Articles","limit":3,"layout":"grid","mode":"public"}}]'
 
         home_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'home').first()
         
@@ -894,12 +893,12 @@ async def startup_event():
             db.add(home_page)
 
         # 2. Login Page
-        login_widgets = '[{"id":"login-form-1","type":"login-form","w":12,"h":12,"x":6,"y":4,"i":"login-form-1","data":{"title":"Connexion Portail", "registerLink":"/register"}}, {"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Inscription","href":"/register","variant":"button-primary"}]}}]'
-        login_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'login').first()
+        login_widgets = '[{"id":"login-form-1","type":"login-form","w":12,"h":12,"x":6,"y":4,"i":"login-form-1","data":{"title":"Connexion Portail", "registerLink":"/app-register"}}, {"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Inscription","href":"/app-register","variant":"button-primary"}]}}]'
+        login_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'app-login').first()
         if not login_page:
             login_page = models.BuilderPage(
                 name="Login",
-                slug="login",
+                slug="app-login",
                 project_id=portal_id,
                 widgets_json=login_widgets,
                 is_published=True,
@@ -913,12 +912,12 @@ async def startup_event():
              db.add(login_page)
         
         # 3. Register Page
-        register_widgets = '[{"id":"reg-form-1","type":"register-form","w":12,"h":14,"x":6,"y":4,"i":"reg-form-1","data":{"title":"Créer un compte", "loginLink":"/login"}}, {"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/login","variant":"button-outline"}]}}]'
-        register_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'register').first()
+        register_widgets = '[{"id":"reg-form-1","type":"register-form","w":12,"h":14,"x":6,"y":4,"i":"reg-form-1","data":{"title":"Créer un compte", "loginLink":"/app-login"}}, {"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/app-login","variant":"button-outline"}]}}]'
+        register_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'app-register').first()
         if not register_page:
             register_page = models.BuilderPage(
                 name="Inscription",
-                slug="register",
+                slug="app-register",
                 project_id=portal_id,
                 widgets_json=register_widgets,
                 is_published=True,

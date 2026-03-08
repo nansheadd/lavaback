@@ -16,11 +16,14 @@ def get_public_articles(
     skip: int = 0, 
     limit: int = 10, 
     category: Optional[str] = None,
+    project_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(models.Article).filter(models.Article.status == models.ArticleStatus.PUBLISHED)
     if category:
         query = query.filter(models.Article.category == category)
+    if project_id:
+        query = query.filter(models.Article.project_id == project_id)
     return query.order_by(models.Article.published_at.desc()).offset(skip).limit(limit).all()
 
 @router.get("/slug/{slug}", response_model=schemas.Article)
@@ -63,12 +66,15 @@ def get_articles(
     skip: int = 0, 
     limit: int = 100, 
     status: Optional[str] = None,
+    project_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     query = db.query(models.Article)
     if status:
         query = query.filter(models.Article.status == status)
+    if project_id:
+        query = query.filter(models.Article.project_id == project_id)
     # Newest first
     return query.order_by(models.Article.created_at.desc()).offset(skip).limit(limit).all()
 

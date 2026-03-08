@@ -26,6 +26,8 @@ class Article(Base):
     category = Column(String, index=True, nullable=True)
     tags = Column(String, nullable=True) # Comma separated
     
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True) # Optional for global articles? or required for builder? I'll make nullable=True for backwards compatibility
+    
     author_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -33,6 +35,7 @@ class Article(Base):
     
     # Relationships
     author = relationship("User", foreign_keys=[author_id])
+    project = relationship("Project")  # Add this backref if needed
     reviews = relationship("ArticleReview", back_populates="article", cascade="all, delete-orphan")
 
 class ArticleReview(Base):

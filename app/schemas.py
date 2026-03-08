@@ -178,6 +178,7 @@ class ArticleBase(BaseModel):
     status: Optional[str] = "DRAFT"
     category: Optional[str] = None
     tags: Optional[str] = None
+    project_id: Optional[int] = None
 
 class ArticleCreate(ArticleBase):
     pass
@@ -191,6 +192,7 @@ class ArticleUpdate(BaseModel):
     status: Optional[str] = None
     category: Optional[str] = None
     tags: Optional[str] = None
+    project_id: Optional[int] = None
 
 class ArticleReviewBase(BaseModel):
     status: str

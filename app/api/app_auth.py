@@ -31,6 +31,7 @@ class AppToken(BaseModel):
     token_type: str
     user_id: int
     username: str
+    role: str = "free"
 
 @router.post("/apps/{app_id}/auth/register", response_model=AppToken)
 def app_register(app_id: int, user: AppUserCreate, db: Session = Depends(get_db)):
@@ -52,13 +53,15 @@ def app_register(app_id: int, user: AppUserCreate, db: Session = Depends(get_db)
     # 3. Create User
     hashed_pw = get_password_hash(user.password)
     
-    insert_stmt = text(f"""
-        INSERT INTO {table_name} (username, email, hashed_password, created_at)
-        VALUES (:username, :email, :password, CURRENT_TIMESTAMP)
-        RETURNING id, username
-    """)
-    
+    # Check if role column exists (for backward compatibility if the table was created before role was added)
     try:
+        # Assuming role column is added to STANDARD_TABLE_SCHEMAS
+        insert_stmt = text(f"""
+            INSERT INTO {table_name} (username, email, hashed_password, role, created_at)
+            VALUES (:username, :email, :password, 'free', CURRENT_TIMESTAMP)
+            RETURNING id, username, role
+        """)
+        
         result = db.execute(insert_stmt, {
             "username": user.username, 
             "email": user.email, 
@@ -66,19 +69,38 @@ def app_register(app_id: int, user: AppUserCreate, db: Session = Depends(get_db)
         }).fetchone()
         db.commit()
     except Exception as e:
+        # Fallback if role doesn't exist in this specific project's table
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        insert_stmt = text(f"""
+            INSERT INTO {table_name} (username, email, hashed_password, created_at)
+            VALUES (:username, :email, :password, CURRENT_TIMESTAMP)
+            RETURNING id, username
+        """)
+        result = db.execute(insert_stmt, {
+            "username": user.username, 
+            "email": user.email, 
+            "password": hashed_pw
+        }).fetchone()
+        db.commit()
+
+    if not result:
+        raise HTTPException(status_code=500, detail="Failed to create user record")
+
+    user_id = result[0]
+    result_username = result[1]
+    role = result[2] if len(result) > 2 else 'free'
         
     # 4. Generate Token (Scoped to App)
     access_token = create_access_token(
-        data={"sub": result.username, "app_id": app_id, "app_user_id": result.id}
+        data={"sub": result_username, "app_id": app_id, "app_user_id": user_id, "role": role}
     )
     
     return {
         "access_token": access_token, 
         "token_type": "bearer",
-        "user_id": result.id,
-        "username": result.username
+        "user_id": user_id,
+        "username": result_username,
+        "role": role
     }
 
 @router.post("/apps/{app_id}/auth/login", response_model=AppToken)
@@ -90,26 +112,38 @@ def app_login(app_id: int, user: AppUserLogin, db: Session = Depends(get_db)):
          raise HTTPException(status_code=404, detail="App Auth not configured")
          
     # 2. Get User
-    query = text(f"SELECT id, username, hashed_password FROM {table_name} WHERE username = :username")
-    result = db.execute(query, {"username": user.username}).fetchone()
+    # Try fetching with role, fallback if role column doesn't exist
+    try:
+        query = text(f"SELECT id, username, hashed_password, role FROM {table_name} WHERE username = :username OR email = :username")
+        result = db.execute(query, {"username": user.username}).fetchone()
+        has_role_column = True
+    except Exception:
+        db.rollback()
+        query = text(f"SELECT id, username, hashed_password FROM {table_name} WHERE username = :username OR email = :username")
+        result = db.execute(query, {"username": user.username}).fetchone()
+        has_role_column = False
     
     if not result:
         raise HTTPException(status_code=401, detail="Invalid credentials")
         
     # 3. Verify Password
-    # result is a Row object/tuple. 0=id, 1=username, 2=hashed_password
     stored_hash = result[2]
     if not verify_password(user.password, stored_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
         
+    user_id = result[0]
+    result_username = result[1]
+    role = result[3] if has_role_column and len(result) > 3 else 'free'
+        
     # 4. Generate Token
     access_token = create_access_token(
-        data={"sub": result.username, "app_id": app_id, "app_user_id": result.id}
+        data={"sub": result_username, "app_id": app_id, "app_user_id": user_id, "role": role}
     )
     
     return {
         "access_token": access_token, 
         "token_type": "bearer",
-        "user_id": result.id,
-        "username": result.username
+        "user_id": user_id,
+        "username": result_username,
+        "role": role
     }

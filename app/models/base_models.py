@@ -136,6 +136,7 @@ class AppUser(Base):
     
     is_active = Column(Boolean, default=True)
     is_guest = Column(Boolean, default=False)
+    role = Column(String, default="free") # End-user role: free, subscriber, etc.
     
     extra_data = Column(Text, default="{}") # Flexible profile data
     created_at = Column(DateTime(timezone=True), server_default=func.now())
