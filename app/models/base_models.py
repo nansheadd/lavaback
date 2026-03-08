@@ -28,6 +28,11 @@ class Project(Base):
     global_styles = Column(Text, default="{}") # CSS variables and global rules
     
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Database Configuration
+    db_connection_string = Column(String, nullable=True) # Postgres/MySQL URI or None for internal
+    db_type = Column(String, default="internal") # internal, postgres, mysql
+
 
     comments = relationship("Comment", back_populates="project", cascade="all, delete-orphan")
     app_users = relationship("AppUser", back_populates="project", cascade="all, delete-orphan")

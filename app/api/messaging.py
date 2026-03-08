@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from pydantic import BaseModel
@@ -9,6 +9,7 @@ import urllib.request
 from bs4 import BeautifulSoup
 from app import models, database
 from app.auth import get_current_user
+from app.core.websockets import manager
 
 router = APIRouter()
 
@@ -484,6 +485,7 @@ def get_messages(
 def send_message(
     channel_id: int,
     message: MessageCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -533,11 +535,6 @@ def send_message(
         for user in mentioned_users:
             # Don't notify self
             if user.id != current_user.id:
-                # Check if user has access to this channel (if private)
-                # But for now, we assume if they are mentioned, we notify them. 
-                # Ideally check membership if private channel.
-                
-                # Create Notification
                 notification = models.Notification(
                     user_id=user.id,
                     notification_type=models.NotificationType.MENTION.value,
@@ -546,17 +543,32 @@ def send_message(
                     related_link=f"/dashboard/chat?channel={channel_id}" 
                 )
                 db.add(notification)
+                db.flush()
+                db.refresh(notification) # Get ID and timestamps
+
+                # WS Notification
+                notif_data = {
+                    "id": notification.id,
+                    "notification_type": notification.notification_type,
+                    "title": notification.title,
+                    "content": notification.content,
+                    "related_link": notification.related_link,
+                    "is_read": notification.is_read,
+                    "created_at": notification.created_at.isoformat()
+                }
+                background_tasks.add_task(manager.send_notification, user.id, notif_data)
 
     db.commit()
     db.refresh(db_message)
     
-    return {
+    # Prepare message for response and broadcast
+    response_data = {
         "id": db_message.id,
         "channel_id": db_message.channel_id,
         "user_id": db_message.user_id,
         "username": current_user.username,
         "content": db_message.content,
-        "timestamp": db_message.timestamp,
+        "timestamp": db_message.timestamp.isoformat() if hasattr(db_message.timestamp, 'isoformat') else str(db_message.timestamp),
         "edited_at": db_message.edited_at,
         "is_system_message": False,
         "is_pinned": False,
@@ -566,9 +578,22 @@ def send_message(
             "content": db_message.reply_to.content,
             "username": db_message.reply_to.user.username if db_message.reply_to.user else "System"
         } if db_message.reply_to else None,
-        "reactions": db_message.reactions,
-        "attachments": db_message.attachments
+        "reactions": [],
+        "attachments": [
+            {
+                "id": a.id, 
+                "file_url": a.file_url, 
+                "file_type": a.file_type, 
+                "file_name": a.file_name,
+                "file_size": a.file_size
+            } for a in db_message.attachments
+        ]
     }
+    
+    # Broadcast Message
+    background_tasks.add_task(manager.broadcast_to_channel, response_data, channel_id)
+
+    return db_message
 
 # ========== DM Endpoints ==========
 

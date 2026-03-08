@@ -5,7 +5,7 @@ from sqlalchemy import text, inspect
 from pydantic import BaseModel, EmailStr
 from app import database, models
 from app.auth import get_password_hash, verify_password, create_access_token
-from app.api.app_database import get_table_name
+from app.core.project_db import get_project_table_name
 from datetime import timedelta
 
 router = APIRouter()
@@ -35,7 +35,7 @@ class AppToken(BaseModel):
 @router.post("/apps/{app_id}/auth/register", response_model=AppToken)
 def app_register(app_id: int, user: AppUserCreate, db: Session = Depends(get_db)):
     # 1. Verify User Table Exists
-    table_name = get_table_name(app_id, "users")
+    table_name = get_project_table_name(app_id, "users", db)
     inspector = inspect(db.get_bind())
     if not inspector.has_table(table_name):
          raise HTTPException(status_code=404, detail=f"User table for App {app_id} does not exist. Please enable authentication in Builder.")
@@ -84,7 +84,7 @@ def app_register(app_id: int, user: AppUserCreate, db: Session = Depends(get_db)
 @router.post("/apps/{app_id}/auth/login", response_model=AppToken)
 def app_login(app_id: int, user: AppUserLogin, db: Session = Depends(get_db)):
     # 1. Check Table
-    table_name = get_table_name(app_id, "users")
+    table_name = get_project_table_name(app_id, "users", db)
     inspector = inspect(db.get_bind())
     if not inspector.has_table(table_name):
          raise HTTPException(status_code=404, detail="App Auth not configured")

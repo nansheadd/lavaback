@@ -24,6 +24,8 @@ class ProjectBase(BaseModel):
     summary: Optional[str] = None
     checklist: Optional[str] = "[]"
     settings: Optional[str] = "{}"
+    db_connection_string: Optional[str] = None
+    db_type: Optional[str] = "internal"
 
 class ProjectCreate(ProjectBase):
     pass
@@ -33,6 +35,8 @@ class ProjectUpdate(BaseModel):
     version: Optional[str] = None
     summary: Optional[str] = None
     checklist: Optional[str] = None
+    db_connection_string: Optional[str] = None
+    db_type: Optional[str] = None
 
 class Project(ProjectBase):
     id: int

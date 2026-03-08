@@ -1,4 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, BackgroundTasks
+from app.core.websockets import manager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -15,6 +16,7 @@ from app.api.upload import router as upload_router
 from app.api.users import router as users_router
 from app.api.roles import router as roles_router
 from app.api import dynamic_data
+from app.core.project_db import clear_project_cache
 import uvicorn
 import shutil
 import os
@@ -61,6 +63,8 @@ from app.api.app_auth import router as app_auth_router
 app.include_router(app_auth_router, prefix="/api", tags=["app-auth"])
 from app.api.project_channel import router as project_channel_router
 app.include_router(project_channel_router, prefix="/api", tags=["project-channel"])
+from app.api.websockets import router as websockets_router
+app.include_router(websockets_router, prefix="/api", tags=["websockets"])
 
 # Dependency
 def get_db():
@@ -363,6 +367,11 @@ def update_project(
     
     db.commit()
     db.refresh(project)
+    
+    # Clear DB cache if settings changed
+    if project_update.db_connection_string is not None or project_update.db_type is not None:
+        clear_project_cache(project_id)
+        
     return project
 
 @app.delete("/api/projects/{project_id}")
@@ -406,12 +415,15 @@ def read_comments(project_id: int, db: Session = Depends(get_db)):
 def create_review_thread(
     project_id: int, 
     review: schemas.ReviewThreadCreate, 
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     # 1. Create the ReviewThread
     db_review = models.ReviewThread(**review.model_dump(), project_id=project_id)
-    
+    db.add(db_review)
+    db.flush() # Get ID for the link
+
     # 2. Sync with Chat
     try:
         # Find the project channel
@@ -421,13 +433,15 @@ def create_review_thread(
 
         if channel:
             # Create a message in the chat
-            msg_content = f"📌 **Review Started** ({review.category})\nContext: {review.selection_text or 'No text selected'}"
+            # Link format: /admin/builder/{project_id}?toolId={review.tool_id}&reviewId={db_review.id}
+            link_url = f"/admin/builder/{project_id}?toolId={review.tool_id}&reviewId={db_review.id}"
+            msg_content = f"📌 [**Review Started**]({link_url}) ({review.category})\nContext: {review.selection_text or 'No text selected'}"
             
             chat_msg = models.ChannelMessage(
                 channel_id=channel.id,
                 user_id=current_user.id, # The user starting the review
                 content=msg_content,
-                is_system_message=False # It's a user action, but specialized styling in UI might be needed via Markdown
+                is_system_message=False
             )
             db.add(chat_msg)
             db.flush() # Get ID
@@ -435,10 +449,24 @@ def create_review_thread(
             # Link review to this message
             db_review.chat_thread_id = chat_msg.id
             
+            # Broadcast to WS
+            chat_data = {
+                "id": chat_msg.id,
+                "channel_id": chat_msg.channel_id,
+                "user_id": chat_msg.user_id,
+                "username": current_user.username,
+                "content": chat_msg.content,
+                "timestamp": chat_msg.timestamp.isoformat() if hasattr(chat_msg.timestamp, 'isoformat') else str(chat_msg.timestamp),
+                "is_system_message": False,
+                "is_pinned": False,
+                "reactions": [],
+                "attachments": []
+            }
+            background_tasks.add_task(manager.broadcast_to_channel, chat_data, channel.id)
+            
     except Exception as e:
-        print(f"Error syncing review to chat: {e}")
+        print(f"Error syncing with chat: {e}")
 
-    db.add(db_review)
     db.commit()
     db.refresh(db_review)
     return db_review
@@ -451,35 +479,64 @@ def get_review_threads(project_id: int, db: Session = Depends(get_db)):
 def create_review_comment(
     thread_id: int, 
     comment: schemas.ReviewCommentCreate, 
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    # 1. Check thread exists
+    thread = db.query(models.ReviewThread).filter(models.ReviewThread.id == thread_id).first()
+    if not thread:
+        raise HTTPException(status_code=404, detail="Review thread not found")
+
+    # 2. Create Comment
     db_comment = models.ReviewComment(
-        **comment.model_dump(exclude={"author_name"}), 
+        **comment.model_dump(), 
         thread_id=thread_id,
         author_id=current_user.id,
         author_name=current_user.username
     )
     db.add(db_comment)
-    
-    # --- SYNC WITH CHAT ---
-    try:
-        # Get the thread to find the linked chat message
-        thread = db.query(models.ReviewThread).filter(models.ReviewThread.id == thread_id).first()
-        if thread and thread.chat_thread_id:
-            # Find the channel of the root message
-            root_msg = db.query(models.ChannelMessage).filter(models.ChannelMessage.id == thread.chat_thread_id).first()
-            if root_msg:
-                # Create reply in chat
+    db.flush()
+
+    # 3. Sync with Chat (Thread Reply)
+    if thread.chat_thread_id:
+        try:
+             # Find Chat Message to reply to
+            parent_msg = db.query(models.ChannelMessage).get(thread.chat_thread_id)
+            if parent_msg:
+                # Create Reply Message
                 reply_msg = models.ChannelMessage(
-                    channel_id=root_msg.channel_id,
+                    channel_id=parent_msg.channel_id,
                     user_id=current_user.id,
-                    content=comment.content, # Exact content sync
-                    reply_to_id=thread.chat_thread_id
+                    content=comment.content, # Same content
+                    reply_to_id=parent_msg.id
                 )
                 db.add(reply_msg)
-    except Exception as e:
-        print(f"Error syncing review comment to chat: {e}")
+                db.flush()
+                
+                # Broadcast to WS
+                chat_data = {
+                    "id": reply_msg.id,
+                    "channel_id": reply_msg.channel_id,
+                    "user_id": reply_msg.user_id,
+                    "username": current_user.username,
+                    "content": reply_msg.content,
+                    "timestamp": reply_msg.timestamp.isoformat() if hasattr(reply_msg.timestamp, 'isoformat') else str(reply_msg.timestamp),
+                    "is_system_message": False,
+                    "is_pinned": False,
+                    "reply_to_id": reply_msg.reply_to_id,
+                    "reply_to": {
+                         "id": parent_msg.id,
+                         "content": parent_msg.content,
+                         "username": parent_msg.user.username if parent_msg.user else "System"
+                    },
+                    "reactions": [],
+                    "attachments": []
+                }
+                background_tasks.add_task(manager.broadcast_to_channel, chat_data, parent_msg.channel_id)
+
+        except Exception as e:
+            print(f"Error syncing comment to chat: {e}")
 
     db.commit()
     db.refresh(db_comment)
@@ -587,16 +644,31 @@ async def startup_event():
                     conn.execute(text("ALTER TABLE builder_pages ADD COLUMN project_id INTEGER"))
                     conn.commit()
                 print("Migration successful: 'project_id' column added.")
-
-        # --- Auto-Migration for Project settings ---
+        
+        # --- Auto-Migration for Project settings and DB config ---
         if inspector.has_table("projects"):
             columns = [c["name"] for c in inspector.get_columns("projects")]
+            
             if "settings" not in columns:
                 print("Migrating: Adding 'settings' column to projects...")
                 with database.engine.connect() as conn:
                     conn.execute(text("ALTER TABLE projects ADD COLUMN settings TEXT DEFAULT '{}'"))
                     conn.commit()
                 print("Migration successful: 'settings' column added.")
+
+            if "db_connection_string" not in columns:
+                print("Migrating: Adding 'db_connection_string' column to projects...")
+                with database.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE projects ADD COLUMN db_connection_string VARCHAR"))
+                    conn.commit()
+                print("Migration successful: 'db_connection_string' column added.")
+
+            if "db_type" not in columns:
+                print("Migrating: Adding 'db_type' column to projects...")
+                with database.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE projects ADD COLUMN db_type VARCHAR DEFAULT 'internal'"))
+                    conn.commit()
+                print("Migration successful: 'db_type' column added.")
 
         # --- Auto-Migration for ReviewComment app_user_id ---
         if inspector.has_table("review_comments"):
