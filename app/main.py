@@ -141,7 +141,10 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     if db_user:
         raise HTTPException(status_code=400, detail="Username or Email already registered")
     
-    user_role = db.query(models.Role).filter(models.Role.name == "user").first()
+    user_role = db.query(models.Role).filter(models.Role.name == "admin").first()
+    if not user_role:
+        user_role = db.query(models.Role).filter(models.Role.name == "user").first()
+    
     if not user_role:
         raise HTTPException(status_code=500, detail="Default role configuration missing")
 
@@ -158,9 +161,6 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return new_user
 
-@app.get("/users/me", response_model=schemas.User)
-async def read_users_me(current_user: schemas.User = Depends(get_current_user)):
-    return current_user
 
 # --- User Management ---
 class UserAdminCreate(schemas.BaseModel):

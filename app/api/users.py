@@ -6,6 +6,10 @@ from app.database import get_db
 
 router = APIRouter()
 
+@router.get("/me", response_model=schemas.User)
+async def read_users_me(current_user: models.User = Depends(get_current_user)):
+    return current_user
+
 @router.patch("/me", response_model=schemas.User)
 def update_profile(
     user_update: schemas.UserUpdate,
