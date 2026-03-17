@@ -6,8 +6,9 @@ beautifulsoup4
 sqlalchemy
 psycopg2-binary
 python-jose[cryptography]
-passlib[argon2]
+passlib[argon2,bcrypt]
 argon2-cffi
+bcrypt
 alembic
 lxml
 email-validator
