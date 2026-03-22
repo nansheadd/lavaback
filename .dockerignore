@@ -38,6 +38,8 @@ fly.toml
 
 # Root level utility scripts (bloat)
 /*.py
+!/fix_schema.py
+!/seed_production.py
 !/requirements.txt
 
 # Assets and Data (bloat)
