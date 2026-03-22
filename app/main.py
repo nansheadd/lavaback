@@ -35,8 +35,27 @@ async def startup_event():
     try:
         models.Base.metadata.create_all(bind=database.engine)
         print("Database tables created successfully.")
+        
+        # Automatic Migration for project_id column in articles table
+        from sqlalchemy import text
+        with database.engine.connect() as conn:
+            # Check if production PostgreSQL
+            db_url = os_module.getenv("DATABASE_URL", "")
+            if db_url and "postgresql" in db_url:
+                print("Running PostgreSQL migrations...")
+                conn.execute(text("ALTER TABLE articles ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id);"))
+                conn.commit()
+            else:
+                # SQLite fallback
+                try:
+                    conn.execute(text("ALTER TABLE articles ADD COLUMN project_id INTEGER REFERENCES projects(id);"))
+                    conn.commit()
+                except Exception as e:
+                    if "duplicate column" not in str(e).lower():
+                        print(f"SQLite migration note: {e}")
+        
     except Exception as e:
-        print(f"Error creating database tables: {e}")
+        print(f"Error during startup migration/creation: {e}")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
