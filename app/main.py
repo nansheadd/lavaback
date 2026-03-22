@@ -15,6 +15,7 @@ from app.api.messaging import router as messaging_router
 from app.api.upload import router as upload_router
 from app.api.users import router as users_router
 from app.api.roles import router as roles_router
+from app.api.menus import router as menus_router
 from app.api import dynamic_data
 from app.core.project_db import clear_project_cache
 import uvicorn
@@ -50,6 +51,7 @@ app.include_router(messaging_router, prefix="/api", tags=["messaging"])
 app.include_router(upload_router, prefix="/api", tags=["upload"])
 app.include_router(users_router, prefix="/api/users", tags=["users"])
 app.include_router(roles_router, prefix="/api")
+app.include_router(menus_router, prefix="/api", tags=["menus"])
 app.include_router(dynamic_data.router, prefix="/api", tags=["Dynamic Data"])
 from app.api.notifications import router as notifications_router
 app.include_router(notifications_router, prefix="/api")
@@ -82,6 +84,8 @@ cors_origins_env = os_module.getenv("CORS_ORIGINS", "")
 origins = [
     "http://localhost:5173",  # Vite default
     "http://localhost:5174",  # Vite fallback
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
     "http://localhost:3000",
 ]
 # Add production origins from environment

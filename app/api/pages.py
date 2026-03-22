@@ -164,6 +164,77 @@ def get_page(page_id: int, db: Session = Depends(get_db)):
 def get_page_by_slug(slug: str, db: Session = Depends(get_db)):
     """Get a page by its slug (for public viewing)."""
     page = db.query(BuilderPage).filter(BuilderPage.slug == slug).first()
+    
+    if not page and slug == "home":
+        # Auto-seed the home page with Premium Lava layout
+        print("Auto-seeding default home page for Lava")
+        default_widgets = [
+            {
+                "i": "hero-1",
+                "toolId": "hero",
+                "x": 0, "y": 0, "w": 24, "h": 12,
+                "data": {
+                    "title": "Lava - Revue d'analyse sociale et politique",
+                    "subtitle": "Décrypter avec rigueur et engagement les grands enjeux de notre époque. Un journalisme indépendant, sans publicité.",
+                    "buttonText": "Découvrir la revue",
+                    "imageUrl": "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80"
+                }
+            },
+            {
+                "i": "features-1",
+                "toolId": "features",
+                "x": 0, "y": 12, "w": 24, "h": 10,
+                "data": {
+                    "title": "Notre Ligne Éditoriale",
+                    "features": [
+                        {"title": "Analyse Critique", "desc": "Prendre de la hauteur pour comprendre les dynamiques structurelles de notre société."},
+                        {"title": "Indépendance", "desc": "Une information libre de toute pression financière et commerciale, sans publicités."},
+                        {"title": "Engagement", "desc": "Contribuer aux débats pour une transition sociale, démocratique et écologique juste."}
+                    ]
+                }
+            },
+            {
+                "i": "articles-1",
+                "toolId": "article-list",
+                "x": 0, "y": 22, "w": 24, "h": 14,
+                "data": {
+                    "title": "Derniers Articles",
+                    "limit": 3,
+                    "layout": "grid",
+                    "detailPageSlug": "/article"
+                }
+            },
+            {
+                "i": "newsletter-1",
+                "toolId": "newsletter-form",
+                "x": 0, "y": 36, "w": 24, "h": 6,
+                "data": {
+                    "title": "Restez informés, abonnez-vous à notre infolettre",
+                    "placeholder": "Votre adresse email...",
+                    "buttonText": "S'inscrire"
+                }
+            }
+        ]
+        
+        page = BuilderPage(
+            name="Accueil",
+            slug="home",
+            description="Page d'accueil par défaut de Lava",
+            widgets_json=json.dumps(default_widgets),
+            theme_json=json.dumps({
+                "primaryColor": "#f04e23", 
+                "secondaryColor": "#1e2257",
+                "backgroundColor": "#ffffff", 
+                "fontFamily": "Inter, sans-serif", 
+                "borderRadius": "0"
+            }),
+            is_published=True,
+            access_level="public"
+        )
+        db.add(page)
+        db.commit()
+        db.refresh(page)
+
     if not page:
         raise HTTPException(status_code=404, detail="Page not found")
     

@@ -6,6 +6,7 @@ from .base_models import (
     ProjectStatus, Project, Comment, 
     ReviewThread, ReviewComment,
     Role, User, ActivityLog, ChatMessage,
+    Menu, MenuItem,
     # E-Commerce
     ProductCategory, ProductType, Product,
     SubscriptionInterval, SubscriptionPlan,
@@ -35,6 +36,7 @@ __all__ = [
     'ProjectStatus', 'Project', 'Comment',
     'ReviewThread', 'ReviewComment', 
     'Role', 'User', 'ActivityLog', 'ChatMessage',
+    'Menu', 'MenuItem',
     'Workflow', 'WorkflowExecution',
     'BuilderPage',
     'Article', 'ArticleStatus', 'ArticleReview',

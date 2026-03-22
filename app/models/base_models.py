@@ -178,6 +178,35 @@ class ChatMessage(Base):
     
     user = relationship("User", back_populates="messages")
 
+# ========== SITE BUILDER MODELS (Menus) ==========
+
+class Menu(Base):
+    __tablename__ = "menus"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    name = Column(String, index=True) # e.g. "header", "footer"
+    title = Column(String, nullable=True) # Optional display title
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    items = relationship("MenuItem", back_populates="menu", cascade="all, delete-orphan", order_by="MenuItem.order")
+    project = relationship("Project")
+
+class MenuItem(Base):
+    __tablename__ = "menu_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    menu_id = Column(Integer, ForeignKey("menus.id"))
+    label = Column(String)
+    url = Column(String, nullable=True) # External URL or generic route
+    page_id = Column(Integer, ForeignKey("builder_pages.id"), nullable=True) # Internal linked Page
+    order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+
+    menu = relationship("Menu", back_populates="items")
+    page = relationship("BuilderPage")
+
 # ========== E-COMMERCE MODELS ==========
 
 class ProductCategory(Base):

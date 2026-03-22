@@ -2,6 +2,53 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
+# Menu Schemas
+class MenuItemBase(BaseModel):
+    label: str
+    url: Optional[str] = None
+    page_id: Optional[int] = None
+    order: Optional[int] = 0
+    is_active: Optional[bool] = True
+
+class MenuItemCreate(MenuItemBase):
+    pass
+
+class MenuItemUpdate(BaseModel):
+    label: Optional[str] = None
+    url: Optional[str] = None
+    page_id: Optional[int] = None
+    order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+class MenuItem(MenuItemBase):
+    id: int
+    menu_id: int
+
+    class Config:
+        from_attributes = True
+
+class MenuBase(BaseModel):
+    name: str
+    title: Optional[str] = None
+    is_active: Optional[bool] = True
+
+class MenuCreate(MenuBase):
+    project_id: int
+
+class MenuUpdate(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class Menu(MenuBase):
+    id: int
+    project_id: int
+    created_at: datetime
+    items: List[MenuItem] = []
+
+    class Config:
+        from_attributes = True
+
 class CommentBase(BaseModel):
     content: str
     project_id: int
