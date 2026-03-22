@@ -35,27 +35,8 @@ async def startup_event():
     try:
         models.Base.metadata.create_all(bind=database.engine)
         print("Database tables created successfully.")
-        
-        # Automatic Migration for project_id column in articles table
-        from sqlalchemy import text
-        with database.engine.connect() as conn:
-            # Check if production PostgreSQL
-            db_url = os_module.getenv("DATABASE_URL", "")
-            if db_url and "postgresql" in db_url:
-                print("Running PostgreSQL migrations...")
-                conn.execute(text("ALTER TABLE articles ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id);"))
-                conn.commit()
-            else:
-                # SQLite fallback
-                try:
-                    conn.execute(text("ALTER TABLE articles ADD COLUMN project_id INTEGER REFERENCES projects(id);"))
-                    conn.commit()
-                except Exception as e:
-                    if "duplicate column" not in str(e).lower():
-                        print(f"SQLite migration note: {e}")
-        
     except Exception as e:
-        print(f"Error during startup migration/creation: {e}")
+        print(f"Error creating database tables: {e}")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -712,6 +693,16 @@ async def startup_event():
                     conn.execute(text("ALTER TABLE review_threads ADD COLUMN selection_text TEXT"))
                     conn.commit()
                 print("Migration successful: 'selection_text' column added.")
+
+        # --- Auto-Migration for Article project_id ---
+        if inspector.has_table("articles"):
+            columns = [c["name"] for c in inspector.get_columns("articles")]
+            if "project_id" not in columns:
+                print("Migrating: Adding 'project_id' column to articles...")
+                with database.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE articles ADD COLUMN project_id INTEGER REFERENCES projects(id)"))
+                    conn.commit()
+                print("Migration successful: 'project_id' column added to articles.")
                 
     except Exception as e:
         print(f"Error creating/migrating database: {e}")
@@ -891,7 +882,7 @@ async def startup_event():
         # 1. HOME Page (Public Landing)
         home_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'home').first()
         
-        portal_home_widgets = '[{"id":"nav-home","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-home","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/app-login","variant":"button-outline"},{"label":"Inscription","href":"/app-register","variant":"button-primary"}]}}, {"id":"hero-home","type":"hero","w":24,"h":12,"x":0,"y":3,"i":"hero-home","data":{"title":"Lava Portal","subtitle":"La plateforme de journalisme nouvelle génération.","buttonText":"Rejoindre la rédaction","imageUrl":"https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=2070","actionTarget":"/app-register"}}, {"id":"articles-home","type":"article-list","w":24,"h":12,"x":0,"y":15,"i":"articles-home","data":{"title":"Derniers Articles","limit":3,"layout":"grid","mode":"public"}}]'
+        portal_home_widgets = '[{"id":"hero-home","type":"hero","w":24,"h":12,"x":0,"y":0,"i":"hero-home","data":{"title":"Lava Portal","subtitle":"La plateforme de journalisme nouvelle génération.","buttonText":"Rejoindre la rédaction","imageUrl":"https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=2070","actionTarget":"/app-register"}}, {"id":"articles-home","type":"article-list","w":24,"h":12,"x":0,"y":12,"i":"articles-home","data":{"title":"Derniers Articles","limit":3,"layout":"grid","mode":"public"}}]'
 
         home_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'home').first()
         
@@ -916,7 +907,7 @@ async def startup_event():
             db.add(home_page)
 
         # 2. Login Page
-        login_widgets = '[{"id":"login-form-1","type":"login-form","w":12,"h":12,"x":6,"y":4,"i":"login-form-1","data":{"title":"Connexion Portail", "registerLink":"/app-register"}}, {"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Inscription","href":"/app-register","variant":"button-primary"}]}}]'
+        login_widgets = '[{"id":"login-form-1","type":"login-form","w":12,"h":12,"x":6,"y":4,"i":"login-form-1","data":{"title":"Connexion Portail", "registerLink":"/app-register"}}]'
         login_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'app-login').first()
         if not login_page:
             login_page = models.BuilderPage(
@@ -935,7 +926,7 @@ async def startup_event():
              db.add(login_page)
         
         # 3. Register Page
-        register_widgets = '[{"id":"reg-form-1","type":"register-form","w":12,"h":14,"x":6,"y":4,"i":"reg-form-1","data":{"title":"Créer un compte", "loginLink":"/app-login"}}, {"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Accueil","href":"/home"},{"label":"Connexion","href":"/app-login","variant":"button-outline"}]}}]'
+        register_widgets = '[{"id":"reg-form-1","type":"register-form","w":12,"h":14,"x":6,"y":4,"i":"reg-form-1","data":{"title":"Créer un compte", "loginLink":"/app-login"}}]'
         register_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'app-register').first()
         if not register_page:
             register_page = models.BuilderPage(
@@ -954,7 +945,7 @@ async def startup_event():
             db.add(register_page)
         
         # 4. Dashboard (Protected)
-        dashboard_widgets = '[{"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal","links":[{"label":"Dashboard","href":"/dashboard"},{"label":"Déconnexion","href":"/logout","variant":"button-outline"}]}}, {"id":"article-list-1","type":"article-list","w":24,"h":12,"x":0,"y":3,"i":"article-list-1","data":{"title":"Mes Articles","limit":10,"layout":"list", "mode": "admin"}}]'
+        dashboard_widgets = '[{"id":"article-list-1","type":"article-list","w":24,"h":12,"x":0,"y":0,"i":"article-list-1","data":{"title":"Mes Articles","limit":10,"layout":"list", "mode": "admin"}}]'
         dashboard_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'dashboard').first()
         if not dashboard_page:
             dashboard_page = models.BuilderPage(
@@ -974,7 +965,7 @@ async def startup_event():
             db.add(dashboard_page)
 
         # 5. Editor (Protected)
-        editor_widgets = '[{"id":"nav-1","type":"navbar","w":24,"h":3,"x":0,"y":0,"i":"nav-1","data":{"logoText":"Lava Portal"}}, {"id":"editor-1","type":"article-editor","w":24,"h":20,"x":0,"y":3,"i":"editor-1","data":{}}]'
+        editor_widgets = '[{"id":"editor-1","type":"article-editor","w":24,"h":20,"x":0,"y":0,"i":"editor-1","data":{}}]'
         editor_page = db.query(models.BuilderPage).filter(models.BuilderPage.slug == 'editor').first()
         if not editor_page:
             editor_page = models.BuilderPage(
