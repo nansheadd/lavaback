@@ -20,7 +20,7 @@ def run_fix():
         # but for PG it's needed for some operations.
         # However, for simple ALTER TABLE, standard transaction is fine.
         # But let's try to be generic. 
-        if "postgresql" in DATABASE_URL:
+        if DATABASE_URL and "postgresql" in DATABASE_URL:
              conn = conn.execution_options(isolation_level="AUTOCOMMIT")
 
         print("Starting schema fix...")
@@ -28,7 +28,7 @@ def run_fix():
         # 1. Add is_pinned to channel_messages
         print("Checking is_pinned...")
         try:
-            if "postgresql" in DATABASE_URL:
+            if DATABASE_URL and "postgresql" in DATABASE_URL:
                 conn.execute(text("ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE;"))
             else:
                 # SQLite fallback: catch duplicate column error
@@ -46,7 +46,7 @@ def run_fix():
         # 2. Add reply_to_id to channel_messages
         print("Checking reply_to_id...")
         try:
-            if "postgresql" in DATABASE_URL:
+            if DATABASE_URL and "postgresql" in DATABASE_URL:
                 conn.execute(text("ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES channel_messages(id);"))
             else:
                 try:
@@ -64,7 +64,7 @@ def run_fix():
         try:
             print("Checking message_reactions table...")
             # PG syntax for serial. SQLite uses INTEGER PRIMARY KEY AUTOINCREMENT
-            if "postgresql" in DATABASE_URL:
+            if DATABASE_URL and "postgresql" in DATABASE_URL:
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS message_reactions (
                         id SERIAL PRIMARY KEY,
@@ -100,7 +100,7 @@ def run_fix():
 
         for col, pg_type, sqlite_type in project_updates:
             try:
-                if "postgresql" in DATABASE_URL:
+                if DATABASE_URL and "postgresql" in DATABASE_URL:
                     conn.execute(text(f"ALTER TABLE projects ADD COLUMN IF NOT EXISTS {col} {pg_type};"))
                 else:
                     try:
@@ -117,7 +117,7 @@ def run_fix():
         # 5. Add project_id to chat_channels
         print("Checking chat_channels schema...")
         try:
-            if "postgresql" in DATABASE_URL:
+            if DATABASE_URL and "postgresql" in DATABASE_URL:
                 conn.execute(text("ALTER TABLE chat_channels ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE;"))
             else:
                 try:
@@ -134,7 +134,7 @@ def run_fix():
         # 6. Add step_id to review_threads
         print("Checking review_threads schema...")
         try:
-            if "postgresql" in DATABASE_URL:
+            if DATABASE_URL and "postgresql" in DATABASE_URL:
                 conn.execute(text("ALTER TABLE review_threads ADD COLUMN IF NOT EXISTS step_id INTEGER REFERENCES project_steps(id);"))
             else:
                 try:
@@ -154,7 +154,7 @@ def run_fix():
         # 7. Add chat_thread_id to review_threads
         print("Checking review_threads schema (chat_thread_id)...")
         try:
-            if "postgresql" in DATABASE_URL:
+            if DATABASE_URL and "postgresql" in DATABASE_URL:
                 conn.execute(text("ALTER TABLE review_threads ADD COLUMN IF NOT EXISTS chat_thread_id INTEGER REFERENCES channel_messages(id);"))
             else:
                 try:
@@ -167,6 +167,23 @@ def run_fix():
             print("review_threads chat_thread_id checked/added.")
         except Exception as e:
             print(f"Error adding chat_thread_id to review_threads: {e}")
+
+        # 8. Add project_id to articles
+        print("Checking articles schema (project_id)...")
+        try:
+            if DATABASE_URL and "postgresql" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE articles ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id);"))
+            else:
+                try:
+                    conn.execute(text("ALTER TABLE articles ADD COLUMN project_id INTEGER REFERENCES projects(id);"))
+                except Exception as e:
+                     if "duplicate column" in str(e).lower():
+                         print("Column project_id already exists in articles (SQLite).")
+                     else:
+                         raise e
+            print("articles project_id checked/added.")
+        except Exception as e:
+            print(f"Error adding project_id to articles: {e}")
 
         print("Schema fix complete.")
 
