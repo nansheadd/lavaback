@@ -148,9 +148,6 @@ def run_fix():
         except Exception as e:
             print(f"Error adding step_id to review_threads: {e}")
 
-        except Exception as e:
-            print(f"Error adding step_id to review_threads: {e}")
-
         # 7. Add chat_thread_id to review_threads
         print("Checking review_threads schema (chat_thread_id)...")
         try:

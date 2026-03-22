@@ -24,4 +24,4 @@ RUN mkdir -p app/uploads
 EXPOSE 8080
 
 # Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["sh", "-c", "python fix_schema.py && (python seed_production.py || true) && uvicorn app.main:app --host 0.0.0.0 --port 8080"]

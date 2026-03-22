@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine
 from app import models
@@ -198,7 +199,8 @@ def seed_production():
                     category=a_data["category"],
                     status="PUBLISHED",
                     project_id=project_id,
-                    author_id=author.id
+                    author_id=author.id,
+                    published_at=datetime.utcnow()
                 )
                 db.add(article)
         db.commit()
