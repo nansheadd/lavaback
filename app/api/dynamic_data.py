@@ -36,10 +36,17 @@ def get_dynamic_data(
     
     # Check if table exists
     try:
-        # Verify table existence safely
-        check_query = text(f"SELECT to_regclass(:table_name)")
+        # Cross-database table existence check
+        is_sqlite = db.bind.name == 'sqlite'
+        if is_sqlite:
+            check_query = text("SELECT name FROM sqlite_master WHERE type='table' AND name=:table_name")
+        else:
+             # Postgres
+            check_query = text("SELECT to_regclass(:table_name)")
+            
         result = db.execute(check_query, {"table_name": real_table_name}).scalar()
         if not result:
+             # For Postgres, to_regclass returns None if not found. For SQLite, sqlite_master returns None if no row.
              raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found for this app")
              
         # Build Query
@@ -48,7 +55,11 @@ def get_dynamic_data(
         
         # Search
         if search_col and search_val:
-            query_str += f" WHERE {search_col} ILIKE :search_val"
+            is_sqlite = db.bind.name == 'sqlite'
+            if is_sqlite:
+                query_str += f" WHERE LOWER({search_col}) LIKE LOWER(:search_val)"
+            else:
+                query_str += f" WHERE {search_col} ILIKE :search_val"
             params["search_val"] = f"%{search_val}%"
             
         # Sort
@@ -87,11 +98,17 @@ def create_dynamic_data(
         columns = ", ".join(data.keys())
         placeholders = ", ".join([f":{k}" for k in data.keys()])
         
-        query = text(f"INSERT INTO {real_table_name} ({columns}) VALUES ({placeholders}) RETURNING id")
+        is_sqlite = db.bind.name == 'sqlite'
+        if is_sqlite:
+            query = text(f"INSERT INTO {real_table_name} ({columns}) VALUES ({placeholders})")
+            result = db.execute(query, data)
+            new_id = result.lastrowid
+        else:
+            query = text(f"INSERT INTO {real_table_name} ({columns}) VALUES ({placeholders}) RETURNING id")
+            result = db.execute(query, data)
+            new_id = result.scalar()
         
-        result = db.execute(query, data)
         db.commit()
-        new_id = result.scalar()
         
         return {"id": new_id, "message": "Record created"}
     except Exception as e:
