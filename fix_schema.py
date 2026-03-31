@@ -114,6 +114,28 @@ def run_fix():
             except Exception as e:
                 print(f"Error adding {col} to projects: {e}")
         
+        # 4.1 Update BuilderPages table
+        print("Checking builder_pages table schema...")
+        bp_updates = [
+            ("description", "TEXT", "TEXT"),
+            ("category", "VARCHAR", "VARCHAR")
+        ]
+        for col, pg_type, sqlite_type in bp_updates:
+            try:
+                if DATABASE_URL and "postgresql" in DATABASE_URL:
+                    conn.execute(text(f"ALTER TABLE builder_pages ADD COLUMN IF NOT EXISTS {col} {pg_type};"))
+                else:
+                    try:
+                        conn.execute(text(f"ALTER TABLE builder_pages ADD COLUMN {col} {sqlite_type};"))
+                    except Exception as e:
+                         if "duplicate column" in str(e).lower():
+                             print(f"Column {col} already exists in builder_pages (SQLite).")
+                         else:
+                             raise e
+                print(f"Column {col} checked/added to builder_pages.")
+            except Exception as e:
+                print(f"Error adding {col} to builder_pages: {e}")
+        
         # 5. Add project_id to chat_channels
         print("Checking chat_channels schema...")
         try:

@@ -629,16 +629,23 @@ async def startup_event():
                     conn.commit()
                 print("Migration successful: 'status' column added.")
 
-        # --- Auto-Migration for BuilderPage access control ---
         if inspector.has_table("builder_pages"):
             columns = [c["name"] for c in inspector.get_columns("builder_pages")]
-            if "access_level" not in columns:
-                print("Migrating: Adding 'access_level' and 'allowed_roles' columns to builder_pages...")
+            # Check for multiple possible missing columns
+            missing = [col for col in ["access_level", "allowed_roles", "category", "description"] if col not in columns]
+            if missing:
+                print(f"Migrating: Adding {missing} columns to builder_pages...")
                 with database.engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE builder_pages ADD COLUMN access_level VARCHAR DEFAULT 'public'"))
-                    conn.execute(text("ALTER TABLE builder_pages ADD COLUMN allowed_roles TEXT DEFAULT '[]'"))
+                    if "access_level" not in columns:
+                        conn.execute(text("ALTER TABLE builder_pages ADD COLUMN access_level VARCHAR DEFAULT 'public'"))
+                    if "allowed_roles" not in columns:
+                        conn.execute(text("ALTER TABLE builder_pages ADD COLUMN allowed_roles TEXT DEFAULT '[]'"))
+                    if "category" not in columns:
+                        conn.execute(text("ALTER TABLE builder_pages ADD COLUMN category VARCHAR"))
+                    if "description" not in columns:
+                        conn.execute(text("ALTER TABLE builder_pages ADD COLUMN description TEXT"))
                     conn.commit()
-                print("Migration successful: Access control columns added.")
+                print("Migration successful: Added missing columns to builder_pages.")
 
         if inspector.has_table("builder_pages"):
             columns = [c["name"] for c in inspector.get_columns("builder_pages")]
