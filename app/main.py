@@ -710,6 +710,16 @@ async def startup_event():
                     conn.execute(text("ALTER TABLE articles ADD COLUMN project_id INTEGER REFERENCES projects(id)"))
                     conn.commit()
                 print("Migration successful: 'project_id' column added to articles.")
+
+        # --- Auto-Migration for MenuItem footer groups ---
+        if inspector.has_table("menu_items"):
+            columns = [c["name"] for c in inspector.get_columns("menu_items")]
+            if "group_name" not in columns:
+                print("Migrating: Adding 'group_name' column to menu_items...")
+                with database.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE menu_items ADD COLUMN group_name VARCHAR"))
+                    conn.commit()
+                print("Migration successful: 'group_name' column added to menu_items.")
                 
     except Exception as e:
         print(f"Error creating/migrating database: {e}")
