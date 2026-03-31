@@ -5,7 +5,7 @@ Builder Pages API - CRUD for App Builder pages.
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 import json
 import re
 
@@ -20,6 +20,8 @@ router = APIRouter(prefix="/pages", tags=["pages"])
 # === Pydantic Schemas ===
 
 class PageWidget(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     i: str
     toolId: str
     x: int
@@ -29,6 +31,8 @@ class PageWidget(BaseModel):
     data: dict = {}
 
 class ThemeSettings(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     primaryColor: str = "#3B82F6"
     backgroundColor: str = "#FFFFFF"
     fontFamily: str = "Inter, sans-serif"
@@ -36,6 +40,7 @@ class ThemeSettings(BaseModel):
 
 class PageCreate(BaseModel):
     name: str
+    slug: Optional[str] = None
     description: Optional[str] = None
     widgets: List[PageWidget] = []
     theme: Optional[ThemeSettings] = None
@@ -98,7 +103,7 @@ def list_pages(project_id: Optional[int] = None, db: Session = Depends(get_db)):
 def create_page(page: PageCreate, db: Session = Depends(get_db)):
     """Create a new page."""
     # Generate unique slug
-    base_slug = slugify(page.name)
+    base_slug = slugify(page.slug or page.name)
     slug = base_slug
     counter = 1
     while db.query(BuilderPage).filter(BuilderPage.slug == slug).first():
