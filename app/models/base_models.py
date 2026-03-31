@@ -201,6 +201,7 @@ class MenuItem(Base):
     label = Column(String)
     url = Column(String, nullable=True) # External URL or generic route
     page_id = Column(Integer, ForeignKey("builder_pages.id"), nullable=True) # Internal linked Page
+    group_name = Column(String, nullable=True) # Group/column name for footer navigation (e.g. "Magazine", "Articles", "Lava")
     order = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
 

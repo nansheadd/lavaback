@@ -7,6 +7,7 @@ class MenuItemBase(BaseModel):
     label: str
     url: Optional[str] = None
     page_id: Optional[int] = None
+    group_name: Optional[str] = None
     order: Optional[int] = 0
     is_active: Optional[bool] = True
 
@@ -17,6 +18,7 @@ class MenuItemUpdate(BaseModel):
     label: Optional[str] = None
     url: Optional[str] = None
     page_id: Optional[int] = None
+    group_name: Optional[str] = None
     order: Optional[int] = None
     is_active: Optional[bool] = None
 

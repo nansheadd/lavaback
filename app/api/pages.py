@@ -39,6 +39,7 @@ class PageCreate(BaseModel):
     description: Optional[str] = None
     widgets: List[PageWidget] = []
     theme: Optional[ThemeSettings] = None
+    category: Optional[str] = None
     project_id: Optional[int] = None # Added
     # Access Control
     access_level: str = "public"
@@ -51,6 +52,7 @@ class PageUpdate(BaseModel):
     widgets: Optional[List[PageWidget]] = None
     theme: Optional[ThemeSettings] = None
     is_published: Optional[bool] = None
+    category: Optional[str] = None
     project_id: Optional[int] = None # Added
     # Access Control
     access_level: Optional[str] = None
@@ -80,6 +82,7 @@ def list_pages(project_id: Optional[int] = None, db: Session = Depends(get_db)):
             "name": p.name,
             "slug": p.slug,
             "description": p.description,
+            "category": p.category,
             "project_id": p.project_id,
             "is_published": p.is_published,
             "access_level": p.access_level,
@@ -108,6 +111,7 @@ def create_page(page: PageCreate, db: Session = Depends(get_db)):
         project_id=page.project_id,
 
         description=page.description,
+        category=page.category,
         widgets_json=json.dumps([w.model_dump() for w in page.widgets]),
         theme_json=json.dumps(page.theme.model_dump()) if page.theme else None,
         access_level=page.access_level,
@@ -150,6 +154,7 @@ def get_page(page_id: int, db: Session = Depends(get_db)):
         "slug": page.slug,
         "project_id": page.project_id,
         "description": page.description,
+        "category": page.category,
         "widgets": json.loads(page.widgets_json or "[]"),
         "theme": json.loads(page.theme_json) if page.theme_json else None,
         "is_published": page.is_published,
@@ -243,6 +248,7 @@ def get_page_by_slug(slug: str, db: Session = Depends(get_db)):
         "name": page.name,
         "slug": page.slug,
         "project_id": page.project_id,
+        "category": page.category,
         "widgets": json.loads(page.widgets_json or "[]"),
         "theme": json.loads(page.theme_json) if page.theme_json else None,
         "is_published": page.is_published,
@@ -280,6 +286,12 @@ def update_page(page_id: int, update: PageUpdate, db: Session = Depends(get_db))
         if page.description != update.description:
             changes.append("description updated")
         page.description = update.description
+    
+    if update.category is not None:
+        if page.category != update.category:
+            changes.append(f"category changed from '{page.category}' to '{update.category}'")
+        page.category = update.category
+
     if update.widgets is not None:
         # Compare JSON strings for simplicity, or parse and compare dicts for more granular check
         new_widgets_json = json.dumps([w.model_dump() for w in update.widgets])

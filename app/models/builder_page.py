@@ -13,6 +13,7 @@ class BuilderPage(Base):
     name = Column(String, index=True)
     slug = Column(String, unique=True, index=True)  # URL-friendly name
     description = Column(Text, nullable=True)
+    category = Column(String, nullable=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True) # Link to App/Project
     
     # Page content (JSON)
